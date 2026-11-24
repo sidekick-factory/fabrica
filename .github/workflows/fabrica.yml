@@ -11,6 +11,9 @@ on:
       per_streamer:
         description: "Clips por streamer"
         default: "4"
+      fresh:
+        description: "Rehacer los clips de hoy (si/no)"
+        default: "no"
 
 permissions:
   contents: write
@@ -48,6 +51,7 @@ jobs:
         env:
           RANGE: ${{ github.event.inputs.range || '24hr' }}
           CLIPS_PER_STREAMER: ${{ github.event.inputs.per_streamer || '4' }}
+          FRESH: ${{ github.event.inputs.fresh || 'no' }}
         run: python factory/make_clips.py site
 
       - name: Publicar galeria
