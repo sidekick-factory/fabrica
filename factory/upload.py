@@ -43,7 +43,8 @@ def campaigns():
     """login de Twitch -> nombre de la campana de Content Rewards (factory/streamers.json)."""
     try:
         cfg = json.load(open(os.path.join(os.path.dirname(__file__), "streamers.json")))
-        return {s["login"]: s["campaign"] for s in cfg["streamers"] if s.get("campaign")}
+        return {s["login"]: (s["campaign"], s.get("campaign_channels") or ["daily", "diario"])
+                for s in cfg["streamers"] if s.get("campaign")}
     except Exception as e:
         print("no se pudo leer streamers.json", e)
         return {}
@@ -86,7 +87,9 @@ def main():
         out = next((o for o in (clip or {}).get("outputs", []) if o["file"] == fname), None)
         if not out:
             continue
-        campaign = camp.get(clip.get("login"))
+        campaign, chans = camp.get(clip.get("login"), (None, []))
+        if ch not in chans:  # p.ej. Lacy pide publico de habla inglesa: solo cuenta en Daily
+            campaign = None
         title = rest.split("Título:", 1)[1].strip() if "Título:" in rest else out["title"]
         try:
             tmp = os.path.join(tempfile.gettempdir(), fname)
