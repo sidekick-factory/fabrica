@@ -1,4 +1,4 @@
-"""Fabrica Sidekick v3.
+"""Fabrica Sidekick v4.
 
 1. Busca los clips mas vistos de GTA de cada streamer (Twitch).
 2. Los pasa a vertical: camara del streamer arriba, juego abajo.
@@ -6,6 +6,9 @@
    personajes del juego (abajo, leido de los subtitulos del propio juego).
 4. Subtitulos con la palabra actual resaltada en morado, en ingles y/o espanol.
 5. Publica la galeria y prepara la lista de aprobacion del dia.
+v4: filtro de desnudos (NudeNet), juez con IA (Gemini mira el clip: que tan gracioso es,
+    si se entiende, titulo que describe lo que pasa y recorte de la mejor parte),
+    clips de 20 s o mas y mejor calidad de imagen.
 """
 import datetime
 import difflib
@@ -34,6 +37,9 @@ TODAY = datetime.datetime.utcnow().strftime("%Y-%m-%d")
 DAY = SITE / "clips" / TODAY
 WORK = pathlib.Path("work")
 W, H, HALF = 1080, 1920, 960
+MIN_SECONDS = int(os.environ.get("MIN_SECONDS", "20"))
+GEMINI_KEY = os.environ.get("GEMINI_API_KEY", "").strip()
+GEMINI_MODELS = ["gemini-flash-latest", "gemini-2.5-flash", "gemini-2.0-flash"]
 FONT = "DejaVu Sans"
 PURPLE = "&H00FF4DC0&"  # morado brillante (#C04DFF en BGR)
 BLOCKED = ["steamy", "sneaky pic", "nsfw", "nude", "naked", "sex", "boob", "thirst", "18+", "gyatt",
@@ -85,11 +91,120 @@ def candidates(st):
         game = ((n.get("game") or {}).get("name") or "")
         if "grand theft auto" not in game.lower():
             continue
-        if (n.get("durationSeconds") or 0) < 8:
-            continue
+        if (n.get("durationSeconds") or 0) < MIN_SECONDS:
+            continue  # los clips muy cortos no tienen contexto
         out.append({"id": n["id"], "title": n.get("title") or "", "views": n.get("viewCount") or 0,
+                    "seconds": n.get("durationSeconds") or 0,
                     "url": n.get("url") or f"https://clips.twitch.tv/{n['slug']}", "game": game})
     return out
+
+
+# ---------------- 1b. filtros: desnudos y juez con IA ----------------
+_NUDE = None
+NUDE_HARD = {"FEMALE_GENITALIA_EXPOSED", "MALE_GENITALIA_EXPOSED", "ANUS_EXPOSED"}
+NUDE_SOFT = {"FEMALE_BREAST_EXPOSED", "BUTTOCKS_EXPOSED"}
+
+
+def nudity(path, frames=16):
+    """Revisa 16 fotos del clip. Descarta desnudos explicitos (no es ultra estricto:
+    un poco de piel o ropa de playa pasa; pechos/trasero expuestos en varias fotos no)."""
+    global _NUDE
+    try:
+        if _NUDE is None:
+            from nudenet import NudeDetector
+            _NUDE = NudeDetector()
+    except Exception as e:
+        print("nudenet no disponible", e)
+        return False, "sin-revisar"
+    cap = cv2.VideoCapture(str(path))
+    n = int(cap.get(cv2.CAP_PROP_FRAME_COUNT)) or 1
+    hard, soft = 0, 0
+    for i in range(frames):
+        cap.set(cv2.CAP_PROP_POS_FRAMES, int(n * (i + 0.5) / frames))
+        ok, fr = cap.read()
+        if not ok:
+            continue
+        WORK.mkdir(exist_ok=True)
+        tmp = WORK / "nude.jpg"
+        cv2.imwrite(str(tmp), fr)
+        try:
+            found = {d["class"] for d in _NUDE.detect(str(tmp)) if d["score"] >= 0.5}
+        except Exception as e:
+            print("nudenet error", e)
+            continue
+        hard += bool(found & NUDE_HARD)
+        soft += bool(found & NUDE_SOFT)
+    cap.release()
+    bad = hard >= 1 or soft >= 2
+    return bad, f"explicito={hard} piel={soft}"
+
+
+JUDGE_PROMPT = """Eres editor de un canal de YouTube Shorts de momentos graciosos de streamers jugando GTA.
+Mira y escucha este clip de {name} (titulo original del clip: "{title}") y responde SOLO un JSON:
+{{
+ "que_pasa": "una frase concreta de lo que ocurre (quien hace que y por que es gracioso)",
+ "gracioso": 1-10 (que tan divertido/sorprendente es para alguien que no conoce el stream),
+ "contexto": 1-10 (se entiende lo que pasa sin haber visto el directo),
+ "desnudos": "ninguno" | "leve" | "explicito" (pechos, genitales o sexo visibles = explicito; strippers con ropa interior o escenas sugerentes = leve),
+ "apto_monetizar": true/false (YouTube lo monetizaria: sin desnudos explicitos, sin sexo, sin odio, sin violencia real),
+ "inicio": segundo donde empieza la mejor parte (con algo de contexto antes del chiste),
+ "fin": segundo donde termina (justo despues del remate),
+ "titulo_en": "titulo en ingles, max 60 caracteres, que describa EXACTAMENTE lo que pasa y genere curiosidad, estilo Shorts virales, con el nombre del streamer, sin hashtags, 1 emoji al final",
+ "titulo_es": "lo mismo en espanol natural (no traduccion literal)"
+}}
+Ejemplo de buen titulo: "IlloJuan desinstala GTA por accidente en pleno directo 😭". Malo: "IlloJuan en GTA 6"."""
+
+
+def gemini_judge(path, st, c):
+    """Gemini (gratis) mira el clip entero y decide si vale la pena, la mejor parte y el titulo."""
+    if not GEMINI_KEY:
+        return None
+    try:
+        from google import genai
+        from google.genai import types
+        client = genai.Client(api_key=GEMINI_KEY)
+        f = client.files.upload(file=str(path))
+        for _ in range(60):
+            f = client.files.get(name=f.name)
+            if str(f.state).endswith("ACTIVE"):
+                break
+            import time
+            time.sleep(3)
+        prompt = JUDGE_PROMPT.format(name=st["name"], title=(c.get("title") or "").replace('"', "'"))
+        last = None
+        for model in GEMINI_MODELS:
+            try:
+                r = client.models.generate_content(
+                    model=model, contents=[f, prompt],
+                    config=types.GenerateContentConfig(response_mime_type="application/json", temperature=0.4))
+                out = json.loads(r.text)
+                if isinstance(out, list):
+                    out = out[0]
+                out["modelo"] = model
+                try:
+                    client.files.delete(name=f.name)
+                except Exception:
+                    pass
+                return out
+            except Exception as e:
+                last = e
+        print("gemini fallo", last)
+    except Exception as e:
+        print("gemini no disponible", e)
+    return None
+
+
+def trim(src, start, end, dst):
+    run(["ffmpeg", "-y", "-loglevel", "error", "-ss", f"{start:.2f}", "-to", f"{end:.2f}", "-i", src,
+         "-c:v", "libx264", "-preset", "veryfast", "-crf", "14", "-c:a", "aac", "-b:a", "192k", dst])
+
+
+def clean_title(t, st, lang):
+    t = re.sub(r"[#]\w+", "", t or "").strip(" -|\"'")
+    if not t:
+        return None
+    tag = st["hashtags"][0]
+    return (t[:80] + f" {tag} #GTA6 #Shorts").strip()
 
 
 # ---------------- 2. camara del streamer ----------------
@@ -368,10 +483,11 @@ def render(src, cam, vw, vh, band, ass, dst):
         graph = (f"[0:v]split[a][b];[b]crop={int(vw)//2*2}:{fh}:0:{fy0},boxblur=22:3[bl];[a][bl]overlay=0:{fy0}[c];"
                  f"[c]split[c1][c2];[c1]scale={W}:{H}:force_original_aspect_ratio=increase,crop={W}:{H},boxblur=25:2[bg];"
                  f"[c2]scale={W}:-2[fg];[bg][fg]overlay=(W-w)/2:(H-h)/2[v]")
-    graph += f";[v]subtitles={ass.as_posix()}[out]"
+    graph = graph.replace(f"scale={W}:{HALF}", f"scale={W}:{HALF}:flags=lanczos")
+    graph += f";[v]unsharp=5:5:0.6:5:5:0.0,subtitles={ass.as_posix()}[out]"
     run(["ffmpeg", "-y", "-loglevel", "error", "-i", src, "-filter_complex", graph,
-         "-map", "[out]", "-map", "0:a?", "-c:v", "libx264", "-preset", "veryfast", "-crf", "21",
-         "-c:a", "aac", "-b:a", "160k", "-movflags", "+faststart", "-t", "59", dst])
+         "-map", "[out]", "-map", "0:a?", "-c:v", "libx264", "-preset", "fast", "-crf", "18",
+         "-c:a", "aac", "-b:a", "192k", "-movflags", "+faststart", "-t", "59", dst])
 
 
 # ---------------- 7. titulos y descripciones ----------------
@@ -432,7 +548,7 @@ def build_issue(manifest):
     lines = [f"## Clips del {TODAY}",
              "Marca la casilla de cada video que quieras publicar y se sube solo en 1-2 minutos.",
              "Puedes cambiar el título antes de marcar (edita el texto después de `Título:`).", "",
-             "- [ ] `todo` **Aprobar todos**", ""]
+             "- [ ] `todo` **Aprobar TODOS los de esta lista** (cuidado: publica todo)", ""]
     for i, it in enumerate(manifest, 1):
         lines.append(f"### {i}. {it['streamer']} · {it.get('views')} vistas")
         lines.append(f"![]({RAW}/clips/{TODAY}/{it['id']}-frame.jpg)")
@@ -445,10 +561,47 @@ def build_issue(manifest):
 
 
 # ---------------- main ----------------
+def judge(st, c):
+    """Descarga y evalua el clip. Devuelve un puntaje (o None si se descarta)."""
+    cid, url = c["id"], c["url"]
+    raw = WORK / f"{cid}.mp4"
+    if not raw.exists():
+        run(["yt-dlp", "-q", "-f", "best[height<=1080]/best", "-o", raw, url])
+    bad, why = nudity(raw)
+    if bad:
+        print("descartado por desnudos:", cid, why)
+        return None
+    j = gemini_judge(raw, st, c)
+    c["ia"] = j
+    if j:
+        print("IA:", cid, json.dumps(j, ensure_ascii=False)[:400])
+        if j.get("desnudos") == "explicito" or j.get("apto_monetizar") is False:
+            print("descartado por la IA (no monetizable)", cid)
+            return None
+        if (j.get("gracioso") or 0) < 5 or (j.get("contexto") or 0) < 4:
+            print("descartado por la IA (poco gracioso o sin contexto)", cid)
+            return None
+        score = (j.get("gracioso") or 0) * 0.65 + (j.get("contexto") or 0) * 0.35
+    else:
+        score = 5.0
+    import math
+    return score + math.log10(max(c["views"], 10)) * 0.4
+
+
 def process(st, c, manifest):
     cid, url = c["id"], c["url"]
     raw = WORK / f"{cid}.mp4"
-    run(["yt-dlp", "-q", "-f", "best[height<=1080]/best", "-o", raw, url])
+    if not raw.exists():
+        run(["yt-dlp", "-q", "-f", "best[height<=1080]/best", "-o", raw, url])
+    j = c.get("ia") or {}
+    try:
+        a, b = float(j.get("inicio") or 0), float(j.get("fin") or 0)
+        if b - a >= MIN_SECONDS * 0.8 and b - a < (c.get("seconds") or 60) - 2:
+            cut = WORK / f"{cid}-cut.mp4"
+            trim(raw, max(a - 0.5, 0), b + 0.8, cut)
+            raw = cut
+    except Exception as e:
+        print("recorte fallo", e)
     save_frame(raw, DAY / f"{cid}-frame.jpg")
     cam, vw, vh = find_cam(raw, st.get("cam"))
     band = st.get("sub_band", [0.12, 0.855, 0.88, 0.935])
@@ -472,13 +625,15 @@ def process(st, c, manifest):
         name = f"{st['login']}-{cid}-{lang}.mp4"
         render(raw, cam, vw, vh, band, ass, DAY / name)
         ch = CHANNELS[lang]
+        title = clean_title(j.get(f"titulo_{lang}"), st, lang) or make_title(st, c["title"], lang)
         outputs.append({"file": name, "lang": lang, "channel": ch,
-                        "title": make_title(st, c["title"], lang), "desc": make_desc(st, lang, CH_NAME[ch])})
+                        "title": title, "desc": make_desc(st, lang, CH_NAME[ch])})
     if not outputs:
         return False
     manifest.append({"id": cid, "streamer": st["name"], "login": st["login"], "title": c["title"],
                      "views": c["views"], "source": url, "game": c.get("game"),
                      "layout": "cam-arriba" if cam else "completo", "spoken_language": spoken,
+                     "ia": j or None,
                      "game_text": " ".join(w["word"] for w in game_w)[:1500], "streamer_text": " ".join(w["word"] for w in talk)[:1500],
                      "outputs": outputs})
     return True
@@ -496,17 +651,34 @@ def main():
     for group, quota in CFG["daily"].items():
         pool = []
         for st in [s for s in CFG["streamers"] if s["group"] == group]:
-            for c in candidates(st)[:8]:
+            for c in candidates(st)[:12]:
                 pool.append((st, c))
         pool.sort(key=lambda p: -p[1]["views"])
-        made, per = 0, {}
+        # 1) el juez revisa ~3 veces mas clips de los que se necesitan
+        judged, per_j = [], {}
         for st, c in pool:
-            if made >= quota:
+            if len(judged) >= quota * 3:
                 break
-            if c["id"] in done or per.get(st["login"], 0) >= CFG.get("max_per_streamer", 3):
+            if c["id"] in done or per_j.get(st["login"], 0) >= CFG.get("max_per_streamer", 3) * 2:
                 continue
             if any(k in (c["title"] or "").lower() for k in BLOCKED):
                 print("descartado por tema sensible:", c["title"])
+                continue
+            try:
+                sc = judge(st, c)
+            except Exception as ex:
+                print("juez fallo", c["id"], ex, flush=True)
+                continue
+            if sc is not None:
+                judged.append((sc, st, c))
+                per_j[st["login"]] = per_j.get(st["login"], 0) + 1
+        judged.sort(key=lambda x: -x[0])
+        # 2) se fabrican solo los mejores
+        made, per = 0, {}
+        for sc, st, c in judged:
+            if made >= quota:
+                break
+            if per.get(st["login"], 0) >= CFG.get("max_per_streamer", 3):
                 continue
             try:
                 if process(st, c, manifest):
