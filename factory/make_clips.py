@@ -39,7 +39,7 @@ WORK = pathlib.Path("work")
 W, H, HALF = 1080, 1920, 960
 MIN_SECONDS = int(os.environ.get("MIN_SECONDS", "20"))
 GEMINI_KEY = os.environ.get("GEMINI_API_KEY", "").strip()
-GEMINI_MODELS = [m for m in os.environ.get("GEMINI_MODELS", "gemini-3.8-flash,gemini-flash-latest,gemini-3-flash,gemini-2.5-flash").split(",") if m]
+GEMINI_MODELS = [m for m in os.environ.get("GEMINI_MODELS", "gemini-3.8-flash,gemini-3.8-flash-lite").split(",") if m]
 FONT = "DejaVu Sans"
 PURPLE = "&H00FF4DC0&"  # morado brillante (#C04DFF en BGR)
 BLOCKED = ["steamy", "sneaky pic", "nsfw", "nude", "naked", "sex", "boob", "thirst", "18+", "gyatt",
@@ -159,39 +159,48 @@ def gemini_judge(path, st, c):
     """Gemini (gratis) mira el clip entero y decide si vale la pena, la mejor parte y el titulo."""
     if not GEMINI_KEY:
         return None
+    import time
     try:
         from google import genai
         from google.genai import types
         client = genai.Client(api_key=GEMINI_KEY)
         f = client.files.upload(file=str(path))
-        for _ in range(60):
+        for _ in range(40):
             f = client.files.get(name=f.name)
-            if str(f.state).endswith("ACTIVE"):
+            state = getattr(f.state, "name", str(f.state))
+            if "ACTIVE" in state:
                 break
-            import time
+            if "FAILED" in state:
+                raise RuntimeError("gemini no pudo procesar el video")
             time.sleep(3)
         prompt = JUDGE_PROMPT.format(name=st["name"], title=(c.get("title") or "").replace('"', "'"))
         last = None
         for model in GEMINI_MODELS:
-            try:
-                r = client.models.generate_content(
-                    model=model, contents=[f, prompt],
-                    config=types.GenerateContentConfig(response_mime_type="application/json", temperature=0.4))
-                out = json.loads(r.text)
-                if isinstance(out, list):
-                    out = out[0]
-                out["modelo"] = model
+            for attempt in range(4):
                 try:
-                    client.files.delete(name=f.name)
-                except Exception:
-                    pass
-                return out
-            except Exception as e:
-                last = e
-                print("gemini", model, "fallo:", str(e)[:200])
-        print("gemini fallo", last)
+                    r = client.models.generate_content(
+                        model=model, contents=[f, prompt],
+                        config=types.GenerateContentConfig(response_mime_type="application/json", temperature=0.4))
+                    out = json.loads(r.text)
+                    if isinstance(out, list):
+                        out = out[0]
+                    out["modelo"] = model
+                    try:
+                        client.files.delete(name=f.name)
+                    except Exception:
+                        pass
+                    return out
+                except Exception as e:
+                    last = e
+                    msg = str(e)
+                    print("gemini", model, "intento", attempt + 1, "fallo:", msg[:160], flush=True)
+                    if any(k in msg for k in ("503", "UNAVAILABLE", "429", "RESOURCE_EXHAUSTED", "500")) and attempt < 3:
+                        time.sleep(15 * (attempt + 1))  # Google saturado o limite por minuto: esperar y reintentar
+                        continue
+                    break
+        print("gemini fallo", last, flush=True)
     except Exception as e:
-        print("gemini no disponible", e)
+        print("gemini no disponible", e, flush=True)
     return None
 
 
