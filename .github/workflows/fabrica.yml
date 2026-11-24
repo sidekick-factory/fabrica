@@ -15,6 +15,7 @@ on:
 permissions:
   contents: write
   issues: write
+  actions: write
 
 concurrency: fabrica
 
@@ -49,6 +50,7 @@ jobs:
         env:
           RANGE: ${{ github.event.inputs.range || '24hr' }}
           FRESH: ${{ github.event.inputs.fresh || 'no' }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: python factory/make_clips.py site
 
       - name: Publicar galeria
@@ -65,3 +67,11 @@ jobs:
           sleep 20
           gh label create aprobacion --color 9B28F0 --force
           gh issue create --title "Aprobar clips $(date -u +%F)" --body-file issue.md --label aprobacion
+
+      - name: Reintentar subidas que quedaron pendientes por el tope diario
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          for n in $(gh issue list --label aprobacion --state open --json number,body --jq '.[] | select(.body | test("⏳|exceeded")) | .number'); do
+            gh workflow run subir.yml -f issue=$n
+          done
