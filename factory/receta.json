@@ -1,20 +1,23 @@
 {
  "lecciones": [
-  "Hay muy pocos datos: 18 Shorts, 0-4 vistas cada uno, 9-10 horas desde la publicación. Todo lo de abajo es una pista débil, no una conclusión.",
-  "Los títulos con un hecho concreto sacaron más vistas: promedio de unas 3,1 con 'mató a un perro', 'discute con su novia' o 'la novia lo descubrió'. Los genéricos 'X en GTA 6 😂' sacaron unas 1,2.",
-  "Poner en el título qué pasa exactamente (acción + persona/objeto) en vez de 'X en GTA 6'.",
-  "Los títulos de gancho emocional ('no puede creer...', 'lo descubrió') funcionan igual o mejor que los descriptivos. Se pueden seguir usando.",
-  "Mantener el título en inglés y en español con el mismo gancho. Con el mismo clip, Daily igualó o superó a Diario (4 vs 4, 3 vs 3, 4 vs 2, 3 vs 2), pero la diferencia es ruido.",
-  "Cuidar la forma del título: el único con minúsculas y sin emoji ('kai cenat gta6 novia') sacó 0 vistas. Usar mayúsculas bien puestas, frase completa y un emoji.",
-  "No hay diferencia clara entre Lacy y Kai Cenat con clips parecidos, así que no cambiar los pesos todavía.",
-  "La regla actual de 'preguntas de curiosidad del juego' no se puede comprobar con estos datos, porque ningún Short de esta lista es de ese tipo. Mantenerla solo como hipótesis a probar.",
-  "Rellenar 'angulo' y 'gracia' en cada clip: ahora todos están en None y así no se pueden comparar patrones."
+  "Hay muy pocos datos: 21 Shorts, 0-6 vistas cada uno. Casi todos tienen 11-13 horas y 3 tienen solo 1,6 horas. Todo es una pista débil, no una conclusión.",
+  "Corrección a la regla anterior: los títulos concretos ('mató a un perro', 'discute con su novia', 'la novia lo descubrió', 'no puede creer...') sacaron unas 3,4 vistas de media. Los genéricos 'X en GTA 6 😂' sacaron unas 3,1, no 1,2. La diferencia es ruido, así que no está probado que lo concreto gane.",
+  "Lo que sí se ve: los genéricos de Kai Cenat fueron los peores (1, 1, 2, 4, media 2,0), y los de Lacy los mejores (6, 4, 3, 3, media 4,0). El tipo de título no lo explica. Puede ser el clip o simple azar.",
+  "Seguir escribiendo títulos con acción y persona/objeto, porque no perjudican y dan más información para comparar. Hacerlo como prueba, no como regla probada.",
+  "Los ganchos emocionales ('lo descubrió 😭', 'no puede creer 💀') rindieron igual que los descriptivos (2-4 vistas). Se pueden seguir usando.",
+  "Idioma: con el mismo clip, Daily y Diario quedaron parecidos (4-4, 3-3, 4-3, 4-2, y en un caso Diario 6 contra Daily 4). No hay ventaja clara, así que mantener ambos canales con el mismo gancho.",
+  "Streamer: Lacy 4,0 de media a las ~12 h (n=6), Kai Cenat 2,3 (n=12), IlloJuan 4 (n=1). Con estos números no se justifica cambiar pesos.",
+  "Los 3 Shorts de 1,6 horas (2, 1 y 0 vistas) no se pueden comparar con los de 12 horas. Comparar siempre a la misma edad (por ejemplo 24 h) y usar vistas por hora, que ahora son todas ≤0,5.",
+  "'gracia' solo existe en 3 clips (6, 7 y 8) con 0-2 vistas, y 'angulo' está en None en todos. No se puede decir nada de ángulo ni de nota de la IA. Rellenar ambos campos en cada clip.",
+  "Cuidar la forma: el único título en minúsculas, sin emoji y solo con palabras clave ('kai cenat gta6 novia') sacó 0 vistas. Es 1 solo caso, pero no cuesta nada evitarlo."
  ],
  "evitar": [
-  "Títulos genéricos tipo 'X in GTA 6 😂' sin decir qué pasa (0-3 vistas, sobre todo los de Kai Cenat).",
-  "Títulos en minúsculas, sin emoji o con solo palabras clave ('kai cenat gta6 novia').",
-  "Publicar varios clips casi idénticos con el mismo título: hay 4 'Lacy en/in GTA 6' y 4 'Kai Cenat en/in GTA 6' en total.",
-  "Sacar conclusiones de streamers o idiomas con menos de unas 100 vistas por grupo."
+  "Títulos de solo palabras clave, en minúsculas y sin emoji (1 caso, 0 vistas).",
+  "Publicar casi el mismo título varias veces: hay 4 'Lacy en/in GTA 6' y 4 'Kai Cenat en/in GTA 6', y no aportan nada comparables entre sí.",
+  "Sacar conclusiones con menos de unas 100 vistas por grupo: hoy la diferencia máxima entre grupos es de 1-2 vistas.",
+  "Comparar Shorts de edades distintas (1,6 h contra 12 h) sin mirar vistas por hora a la misma edad.",
+  "Dejar el streamer como '?' en los clips de Kai Cenat. Eso impide agrupar bien los datos.",
+  "Títulos genéricos 'X en GTA 6 😂' con Kai Cenat (1-4 vistas, media 2,0). Probar primero con título concreto."
  ],
  "peso_streamer": {
   "lacy": 1.0,
@@ -22,11 +25,11 @@
   "illojuan": 1.0
  },
  "pruebas": [
-  "Con el mismo clip, publicar un título concreto con acción frente a uno genérico, en ambos canales, y comparar vistas por hora a las 24 h.",
-  "Probar 2 clips de curiosidad del juego ('GTA 6: ¿qué pasa si...?') por canal, para comprobar si la regla actual vale también en Daily.",
-  "Probar 3 clips de IlloJuan en Diario con título concreto, porque solo hay 1 dato y no se sabe si ese streamer funciona en español."
+  "Mismo clip, mismo canal: un título concreto con acción frente a uno genérico, en horarios parecidos y sin repetir el mismo título. Comparar vistas por hora a las 24 h, con al menos 6 clips por variante.",
+  "Publicar 3 clips de IlloJuan en Diario con título concreto, porque solo hay 1 dato y no se sabe si funciona en español.",
+  "Probar 2 clips de curiosidad del juego ('GTA 6: ¿qué pasa si...?') por canal contra 2 clips de momentos de streamer. Rellenar 'angulo' y 'gracia' en todos."
  ],
- "resumen": "Con tan pocos datos (máximo 4 vistas por Short) solo se ve una pista: los títulos que cuentan qué pasa, como 'mató a un perro' o 'la novia lo descubrió', sacaron más vistas que los genéricos 'X en GTA 6 😂'. Por ahora no cambiamos los pesos de los streamers, usamos títulos concretos y la próxima semana probamos curiosidad del juego y títulos con acción.",
+ "resumen": "Con 21 Shorts y 0-6 vistas cada uno no se puede decir qué funciona: los títulos concretos sacaron unas 3,4 vistas y los genéricos unas 3,1, y esa diferencia es ruido. Corregimos un dato de la regla anterior (los genéricos no sacaron 1,2). No cambiamos los pesos de los streamers, y esta semana probamos título concreto contra genérico con el mismo clip, más IlloJuan y curiosidad del juego.",
  "actualizado": "2026-11-24",
- "shorts_analizados": 18
+ "shorts_analizados": 21
 }
