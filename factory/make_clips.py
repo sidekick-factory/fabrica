@@ -155,12 +155,32 @@ Responde SOLO un JSON:
  "inicio": segundo donde empieza la mejor parte (con algo de contexto antes del chiste),
  "fin": segundo donde termina (justo despues del remate),
  "titulo_en": "titulo en ingles, max 60 caracteres, que describa EXACTAMENTE lo que pasa y genere curiosidad, estilo Shorts virales, con el nombre del streamer, sin hashtags, 1 emoji al final",
- "titulo_es": "lo mismo en espanol natural (no traduccion literal)"
+ "titulo_es": "lo mismo en espanol natural (no traduccion literal)",
+ "angulo": "reaccion" | "curiosidad_del_juego" | "fail" | "drama" | "otro" (curiosidad_del_juego = muestra algo sorprendente que se puede hacer en GTA 6)
 }}
-Ejemplo de buen titulo: "IlloJuan desinstala GTA por accidente en pleno directo 😭". Malo: "IlloJuan en GTA 6"."""
+Ejemplo de buen titulo: "IlloJuan desinstala GTA por accidente en pleno directo 😭". Malo: "IlloJuan en GTA 6".
+Si el clip muestra una mecanica curiosa del juego, usa el formato pregunta: "GTA 6: ¿qué pasa si le das tu arma al cajero?" (este formato ya funciono muy bien en el canal).
+{receta}"""
 
 AI = {"calls": 0, "fails": 0, "off": False, "gemini_models": None}
-AI_MAX_CALLS = int(os.environ.get("AI_MAX_CALLS", "18"))  # el nivel gratis de Gemini da pocas consultas al dia
+AI_MAX_CALLS = int(os.environ.get("AI_MAX_CALLS", "45"))  # tope de consultas por corrida (cuida el cupo y los $)
+AI_ORDER = [x for x in os.environ.get("AI_ORDER", "claude,gemini").split(",") if x]  # Claude primero (preciso), Gemini gratis de respaldo
+RECETA_FILE = ROOT / "receta.json"
+RECETA = json.loads(RECETA_FILE.read_text()) if RECETA_FILE.exists() else {}
+
+
+def receta_text():
+    """Lo que la fabrica ya aprendio de las vistas reales (lo actualiza factory/aprender.py)."""
+    parts = []
+    if RECETA.get("lecciones"):
+        parts.append("Lo que mejor funciona en nuestros canales (datos reales de vistas):\n- " + "\n- ".join(RECETA["lecciones"][:12]))
+    if RECETA.get("evitar"):
+        parts.append("Evitar:\n- " + "\n- ".join(RECETA["evitar"][:8]))
+    return ("\n" + "\n".join(parts)) if parts else ""
+
+
+def streamer_weight(login):
+    return float((RECETA.get("peso_streamer") or {}).get(login, 1.0))
 ANTHROPIC_KEY = os.environ.get("ANTHROPIC_API_KEY", "").strip()  # opcion B: Claude (si algun dia se agrega la clave)
 CLAUDE_MODEL = os.environ.get("CLAUDE_MODEL", "claude-haiku-5-5")
 
@@ -278,10 +298,12 @@ def ai_judge(path, st, c, words):
             AI["cap_msg"] = True
         return None
     frames, step = clip_frames(path)
-    prompt = JUDGE_PROMPT.format(n=len(frames), step=step, name=st["name"],
+    prompt = JUDGE_PROMPT.format(n=len(frames), step=step, name=st["name"], receta=receta_text(),
                                  title=(c.get("title") or "").replace('"', "'"), transcript=transcript_text(words))
     AI["calls"] += 1
-    for name, fn, ok in (("gemini", _ask_gemini, GEMINI_KEY), ("claude", _ask_claude, ANTHROPIC_KEY)):
+    providers = {"gemini": (_ask_gemini, GEMINI_KEY), "claude": (_ask_claude, ANTHROPIC_KEY)}
+    for name in AI_ORDER:
+        fn, ok = providers.get(name, (None, None))
         if not ok:
             continue
         try:
@@ -684,7 +706,7 @@ def judge(st, c):
         return None
     j = ai_judge(raw, st, c, words)
     c["ia"] = j
-    base = math.log10(max(c["views"], 10)) * 0.4
+    base = math.log10(max(c["views"], 10)) * 0.4 + (streamer_weight(st["login"]) - 1.0) * 2
     if j:
         print("IA:", cid, json.dumps(j, ensure_ascii=False)[:400], flush=True)
         if j.get("desnudos") == "explicito" or j.get("apto_monetizar") is False:
@@ -772,7 +794,7 @@ def main():
         judged, per_j = [], {}
         t0 = time.time()
         for st, c in pool:
-            if len(judged) >= quota * 2 or time.time() - t0 > JUDGE_MINUTES * 60:
+            if len(judged) >= quota * (3 if ANTHROPIC_KEY else 2) or time.time() - t0 > JUDGE_MINUTES * 60:
                 break
             if c["id"] in done or per_j.get(st["login"], 0) >= CFG.get("max_per_streamer", 3) * 2:
                 continue
