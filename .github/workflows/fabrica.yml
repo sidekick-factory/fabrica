@@ -66,7 +66,9 @@ jobs:
         run: |
           sleep 20
           gh label create aprobacion --color 9B28F0 --force
-          gh issue create --title "Aprobar clips $(date -u +%F)" --body-file issue.md --label aprobacion
+          if [ "$(cat new_count)" != "0" ]; then
+            gh issue create --title "Aprobar clips $(date -u +'%F %H:%M') UTC" --body-file issue.md --label aprobacion
+          fi
 
       - name: Reintentar subidas que quedaron pendientes por el tope diario
         env:
