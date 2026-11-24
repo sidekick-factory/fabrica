@@ -113,6 +113,14 @@ def main():
         if all_ok is False:
             pass
     if results:
+        # Releer la lista justo antes de guardar: si mientras subia se marcaron otras casillas,
+        # se respetan (antes se pisaban y "se desmarcaban"). Solo se cambian las lineas subidas.
+        done = {mm.group("key") + "|" + mm.group("ch"): mm.group(0) for mm in LINE.finditer(body)}
+        fresh = json.loads(gh("issue", "view", NUM, "--json", "body"))["body"]
+        line_any = re.compile(r"^- \[[ xX]\] `(?P<key>[^`|]+)\|(?P<ch>daily|diario)`.*$", re.M)
+        body = line_any.sub(lambda mm: done.get(mm.group("key") + "|" + mm.group("ch"), mm.group(0))
+                            if any(c in done.get(mm.group("key") + "|" + mm.group("ch"), "") for c in "✅❌🔒⏳")
+                            else mm.group(0), fresh)
         with tempfile.NamedTemporaryFile("w", suffix=".md", delete=False) as f:
             f.write(body)
         gh("issue", "edit", NUM, "--body-file", f.name)
