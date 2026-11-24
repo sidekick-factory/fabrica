@@ -1,0 +1,58 @@
+name: Fabrica diaria
+
+on:
+  schedule:
+    - cron: "17 13 * * *"
+  workflow_dispatch:
+    inputs:
+      range:
+        description: "Periodo de clips (24hr, 7d, 30d)"
+        default: "24hr"
+      per_streamer:
+        description: "Clips por streamer"
+        default: "4"
+
+permissions:
+  contents: write
+
+concurrency: fabrica
+
+jobs:
+  clips:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Traer la galeria actual
+        run: |
+          git clone --depth 1 --branch gh-pages "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" site || mkdir -p site
+          rm -rf site/.git
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Instalar herramientas
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg fonts-dejavu-core
+          pip install -q -r requirements.txt
+
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/huggingface
+          key: whisper-small
+
+      - name: Fabricar clips
+        env:
+          RANGE: ${{ github.event.inputs.range || '24hr' }}
+          CLIPS_PER_STREAMER: ${{ github.event.inputs.per_streamer || '4' }}
+        run: python factory/make_clips.py site
+
+      - name: Publicar galeria
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./site
+          force_orphan: true
