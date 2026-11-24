@@ -21,6 +21,7 @@ import shutil
 import subprocess
 import sys
 import time
+import urllib.error
 import urllib.request
 
 import cv2
@@ -302,10 +303,27 @@ def _ask_claude(frames, prompt):
         data=json.dumps({"model": CLAUDE_MODEL, "max_tokens": 800,
                          "messages": [{"role": "user", "content": content}]}).encode(),
         headers={"x-api-key": ANTHROPIC_KEY, "anthropic-version": "2023-06-01", "content-type": "application/json"})
-    r = json.loads(urllib.request.urlopen(req, timeout=90).read())
+    r = claude_request(req)
     out = _parse("".join(b.get("text", "") for b in r.get("content", [])))
     out["modelo"] = CLAUDE_MODEL
     return out
+
+
+def claude_request(req):
+    """Llama a la API de Claude y deja en el registro el motivo exacto si algo sale mal."""
+    try:
+        resp = urllib.request.urlopen(req, timeout=90)
+        raw = resp.read()
+    except urllib.error.HTTPError as e:
+        body = e.read()[:400]
+        raise RuntimeError(f"Claude HTTP {e.code}: {body!r}")
+    try:
+        r = json.loads(raw)
+    except Exception:
+        raise RuntimeError(f"Claude respondio algo que no es JSON (status {resp.status}): {raw[:300]!r}")
+    if not any(b.get("text") for b in r.get("content", [])):
+        raise RuntimeError(f"Claude respondio sin texto: {json.dumps(r)[:300]}")
+    return r
 
 
 def ai_judge(path, st, c, words):
@@ -564,7 +582,7 @@ def translate_batch(texts, src, dst):
                 data=json.dumps({"model": CLAUDE_MODEL, "max_tokens": 3000,
                                  "messages": [{"role": "user", "content": prompt}]}).encode(),
                 headers={"x-api-key": ANTHROPIC_KEY, "anthropic-version": "2023-06-01", "content-type": "application/json"})
-            r = json.loads(urllib.request.urlopen(req, timeout=90).read())
+            r = claude_request(req)
             txt = "".join(b.get("text", "") for b in r.get("content", []))
             out = json.loads(txt[txt.find("["):txt.rfind("]") + 1])
             if len(out) == len(todo):
