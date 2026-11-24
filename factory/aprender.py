@@ -15,6 +15,7 @@ import os
 import pathlib
 import re
 import subprocess
+import urllib.error
 import urllib.request
 
 REPO = os.environ.get("GITHUB_REPOSITORY", "sidekick-factory/fabrica")
@@ -127,10 +128,17 @@ def ask_ai(prompt):
     if key:
         req = urllib.request.Request(
             "https://api.anthropic.com/v1/messages", method="POST",
-            data=json.dumps({"model": os.environ.get("CLAUDE_MODEL_ANALISIS", "claude-sonnet-5-5"), "max_tokens": 2000,
+            data=json.dumps({"model": os.environ.get("CLAUDE_MODEL_ANALISIS", "claude-sonnet-5-5"), "max_tokens": 4000,
                              "messages": [{"role": "user", "content": prompt}]}).encode(),
             headers={"x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json"})
-        r = json.loads(urllib.request.urlopen(req, timeout=120).read())
+        try:
+            raw = urllib.request.urlopen(req, timeout=120).read()
+        except urllib.error.HTTPError as e:
+            raise RuntimeError(f"Claude HTTP {e.code}: {e.read()[:400]!r}")
+        try:
+            r = json.loads(raw)
+        except Exception:
+            raise RuntimeError(f"Claude respondio algo que no es JSON: {raw[:300]!r}")
         return "".join(b.get("text", "") for b in r.get("content", []))
     gkey = os.environ.get("GEMINI_API_KEY", "").strip()
     if gkey:
@@ -158,9 +166,18 @@ def main():
         print("todavia hay pocos Shorts para aprender")
         return
     old = json.loads(RECETA.read_text()) if RECETA.exists() else {}
-    txt = ask_ai(PROMPT.format(tabla=tabla, receta=json.dumps(old, ensure_ascii=False)))
-    i, j = txt.find("{"), txt.rfind("}")
-    new = json.loads(txt[i:j + 1])
+    new = None
+    for intento in range(2):  # si la IA responde vacio o cortado, reintenta una vez
+        try:
+            txt = ask_ai(PROMPT.format(tabla=tabla, receta=json.dumps(old, ensure_ascii=False)))
+            i, j = txt.find("{"), txt.rfind("}")
+            new = json.loads(txt[i:j + 1])
+            break
+        except Exception as e:
+            print("la IA no devolvio una receta valida:", str(e)[:200], "| respuesta:", (locals().get("txt") or "")[:300])
+    if not new:
+        print("se mantiene la receta anterior")
+        return
     new["actualizado"] = datetime.datetime.utcnow().strftime("%Y-%m-%d")
     new["shorts_analizados"] = len(rows)
     RECETA.write_text(json.dumps(new, ensure_ascii=False, indent=1))
