@@ -24,6 +24,9 @@ DAY = SITE / "clips" / TODAY
 WORK = pathlib.Path("work")
 W, H, HALF = 1080, 1920, 960
 FONT = "DejaVu Sans"
+# temas que YouTube castiga o que las campanas rechazan
+BLOCKED = ["steamy", "sneaky pic", "nsfw", "nude", "naked", "sex", "boob", "thirst", "18+",
+           "drunk", "drugs", "weed", "gun shop", "racist", "n word", "slur", "fight irl", "gg ban"]
 
 
 def run(cmd):
@@ -47,31 +50,51 @@ def top_clips(login):
 
 
 # ---------- 2. encontrar la camara del streamer ----------
-def find_cam(path):
+def save_frame(path, dst):
+    cap = cv2.VideoCapture(str(path))
+    n = int(cap.get(cv2.CAP_PROP_FRAME_COUNT)) or 1
+    cap.set(cv2.CAP_PROP_POS_FRAMES, n // 2)
+    ok, frame = cap.read()
+    cap.release()
+    if ok:
+        cv2.imwrite(str(dst), cv2.resize(frame, (960, 540)), [cv2.IMWRITE_JPEG_QUALITY, 80])
+
+
+def find_cam(path, fixed=None):
+    """La camara del streamer es la cara que NO se mueve: los personajes del juego si."""
     cap = cv2.VideoCapture(str(path))
     n = int(cap.get(cv2.CAP_PROP_FRAME_COUNT)) or 1
     vw, vh = cap.get(cv2.CAP_PROP_FRAME_WIDTH), cap.get(cv2.CAP_PROP_FRAME_HEIGHT)
-    casc = cv2.CascadeClassifier(cv2.data.haarcascades + "haarcascade_frontalface_default.xml")
-    found = []
-    if casc.empty():
-        print("sin detector de caras, uso formato completo")
-        return None, vw, vh
-    for i in range(10):
-        cap.set(cv2.CAP_PROP_POS_FRAMES, int(n * (i + 0.5) / 10))
-        ok, frame = cap.read()
-        if not ok:
-            continue
-        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-        faces = casc.detectMultiScale(gray, 1.1, 6, minSize=(int(vh * 0.05), int(vh * 0.05)))
-        if len(faces):
-            x, y, w, h = max(faces, key=lambda b: b[2] * b[3])
-            found.append((x + w / 2, y + h / 2, w))
-    cap.release()
-    if len(found) < 4:
-        return None, vw, vh
-    cx, cy, fw = np.median(np.array(found), axis=0)
-    if fw > vw * 0.22:  # cara enorme = camara a pantalla completa, no hay overlay
-        return None, vw, vh
+    if fixed:  # caja fija por streamer, en fracciones [x, y, ancho, alto] de la camara
+        cap.release()
+        fx, fy, fw_, fh_ = fixed
+        cx, cy, fw = (fx + fw_ / 2) * vw, (fy + fh_ / 2) * vh, fw_ * vw / 4.5
+    else:
+        casc = cv2.CascadeClassifier(cv2.data.haarcascades + "haarcascade_frontalface_default.xml")
+        if casc.empty():
+            print("sin detector de caras, uso formato completo")
+            return None, vw, vh
+        dets, frames = [], 16
+        for i in range(frames):
+            cap.set(cv2.CAP_PROP_POS_FRAMES, int(n * (i + 0.5) / frames))
+            ok, frame = cap.read()
+            if not ok:
+                continue
+            gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+            for (x, y, w, h) in casc.detectMultiScale(gray, 1.1, 6, minSize=(int(vh * 0.05),) * 2):
+                dets.append((i, x + w / 2, y + h / 2, w))
+        cap.release()
+        best, best_score = None, 0
+        for d in dets:
+            near = [e for e in dets if abs(e[1] - d[1]) < vw * 0.035 and abs(e[2] - d[2]) < vh * 0.05]
+            score = len({e[0] for e in near})
+            if score > best_score:
+                best, best_score = near, score
+        if not best or best_score < frames * 0.4:
+            return None, vw, vh
+        cx, cy, fw = np.median(np.array([(e[1], e[2], e[3]) for e in best]), axis=0)
+        if fw > vw * 0.22:  # cara enorme = camara a pantalla completa, no hay overlay
+            return None, vw, vh
     cw = min(vw, fw * 4.5)
     ch = cw * HALF / W
     if ch > vh:
@@ -100,13 +123,19 @@ def transcribe(path):
 def translate(texts, src, dst):
     if src == dst:
         return texts
-    try:
-        from deep_translator import GoogleTranslator
-        tr = GoogleTranslator(source=src, target=dst)
-        return [tr.translate(t) if t.strip() else t for t in texts]
-    except Exception as e:  # sin traduccion, mejor sin subtitulos que roto
-        print("traduccion fallo:", e)
-        return None
+    from deep_translator import GoogleTranslator, MyMemoryTranslator
+    langs = {"en": "en-US", "es": "es-ES"}
+    makers = [lambda: GoogleTranslator(source=src, target=dst),
+              lambda: MyMemoryTranslator(source=langs.get(src, src), target=langs.get(dst, dst))]
+    for make in makers:
+        try:
+            tr = make()
+            out = [tr.translate(t) if t.strip() else t for t in texts]
+            if any(out):
+                return out
+        except Exception as e:
+            print("traductor fallo:", type(e).__name__, e, flush=True)
+    return None  # sin traduccion, mejor sin subtitulos que rotos
 
 
 def chunks_from_words(segs, size=3):
@@ -195,7 +224,9 @@ def build_index():
                 for lang, f in it["files"].items())
             cards.append(
                 f'<article><h3>{html.escape(it["streamer"])} · {it.get("views") or "?"} vistas</h3>'
-                f'<p class="t">{html.escape(it["title"])}</p><div class="v">{vids}</div>'
+                f'<p class="t">{html.escape(it["title"])} · formato {it.get("layout")}</p><div class="v">{vids}'
+                f'<figure><img src="clips/{d.name}/{it["id"]}-frame.jpg" style="width:220px;border-radius:8px">'
+                f'<figcaption>ORIGINAL</figcaption></figure></div>'
                 f'<p class="h">{html.escape(" ".join(it["hashtags"]))}</p>'
                 f'<p><a href="{it["source"]}">clip original</a> · id <code>{it["id"]}</code></p></article>')
         blocks.append(f"<h2>{d.name}</h2>" + "".join(cards))
@@ -215,6 +246,9 @@ def main():
     WORK.mkdir(exist_ok=True)
     (SITE / ".nojekyll").touch()
     mf = DAY / "manifest.json"
+    if os.environ.get("FRESH") == "si" and DAY.exists():
+        shutil.rmtree(DAY)
+        DAY.mkdir(parents=True)
     manifest = json.loads(mf.read_text()) if mf.exists() else []
     done = {m["id"] for m in manifest}
     for st in CFG["streamers"]:
@@ -226,12 +260,20 @@ def main():
             if cid in done:
                 continue
             url = e.get("url")
+            title = (e.get("title") or "").lower()
+            if any(k in title for k in BLOCKED):
+                print("descartado por tema sensible:", title)
+                continue
             try:
                 meta = ytdlp_json(["-J", url]) or {}
                 raw = WORK / f"{cid}.mp4"
                 run(["yt-dlp", "-f", "best[height<=1080]/best", "-o", raw, url])
-                cam, vw, vh = find_cam(raw)
+                save_frame(raw, DAY / f"{cid}-frame.jpg")
+                cam, vw, vh = find_cam(raw, st.get("cam"))
                 segs, lang = transcribe(raw)
+                if sum(len(s.text.split()) for s in segs) < 6:
+                    print("descartado: casi no hay dialogo", cid)
+                    continue
                 files = {}
                 y_sub = HALF if cam else int(H * 0.78)
                 texts = [s.text.strip() for s in segs]
