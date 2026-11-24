@@ -46,6 +46,13 @@ jobs:
           path: ~/.cache/huggingface
           key: whisper-small
 
+      - name: Buscar ideas en tendencia
+        continue-on-error: true
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: python factory/tendencias.py
+
       - name: Fabricar clips
         env:
           RANGE: ${{ github.event.inputs.range || '24hr' }}
