@@ -6,39 +6,33 @@ on:
 jobs:
   probar:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
-      - name: Probar Claude con texto y con foto
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install -q "opencv-python-headless<5" numpy
+      - name: Probar el juez con Claude (igual que en la fabrica)
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          AI_ORDER: claude
         run: |
+          mkdir -p work
           python3 - <<'PY'
-          import base64, json, os, struct, urllib.request, urllib.error, zlib
-          key = os.environ["ANTHROPIC_API_KEY"].strip()
-          print("clave presente:", bool(key), "largo:", len(key), "prefijo:", key[:10])
-          def png():
-              raw = b"".join(b"\x00" + b"\xff\x00\x00" * 64 for _ in range(64))
-              def chunk(t, d):
-                  return struct.pack(">I", len(d)) + t + d + struct.pack(">I", zlib.crc32(t + d) & 0xffffffff)
-              return b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", 64, 64, 8, 2, 0, 0, 0)) + chunk(b"IDAT", zlib.compress(raw)) + chunk(b"IEND", b"")
-          tests = [
-              ("haiku texto", "claude-haiku-5-5", [{"type": "text", "text": "Responde solo el JSON {\"ok\": true}"}]),
-              ("haiku foto", "claude-haiku-5-5", [{"type": "image", "source": {"type": "base64", "media_type": "image/png", "data": base64.b64encode(png()).decode()}},
-                                                 {"type": "text", "text": "De que color es la imagen? Responde solo JSON {\"color\": \"...\"}"}]),
-              ("sonnet foto", "claude-sonnet-5-5", [{"type": "image", "source": {"type": "base64", "media_type": "image/png", "data": base64.b64encode(png()).decode()}},
-                                                  {"type": "text", "text": "De que color es la imagen? Responde solo JSON {\"color\": \"...\"}"}]),
-          ]
-          for name, model, content in tests:
-              req = urllib.request.Request("https://api.anthropic.com/v1/messages", method="POST",
-                  data=json.dumps({"model": model, "max_tokens": 200, "messages": [{"role": "user", "content": content}]}).encode(),
-                  headers={"x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json"})
-              try:
-                  resp = urllib.request.urlopen(req, timeout=60)
-                  raw = resp.read()
-                  print("==", name, "status", resp.status, "headers", dict(resp.headers).get("Content-Type"), "|", raw[:500])
-              except urllib.error.HTTPError as e:
-                  print("==", name, "HTTP", e.code, e.read()[:500])
-              except Exception as e:
-                  print("==", name, "ERROR", type(e).__name__, e)
+          import sys, json, cv2, numpy as np
+          sys.argv = ["x", "site"]
+          sys.path.insert(0, "factory")
+          import make_clips as m
+          vw = cv2.VideoWriter("work/t.mp4", cv2.VideoWriter_fourcc(*"mp4v"), 10, (640, 360))
+          for i in range(120):
+              f = np.zeros((360, 640, 3), np.uint8); f[:] = (30, 120 + i, 200)
+              cv2.putText(f, "GTA 6 car crash %d" % i, (40, 180), cv2.FONT_HERSHEY_SIMPLEX, 1.2, (255, 255, 255), 3)
+              vw.write(f)
+          vw.release()
+          words = [{"start": i * 0.5, "end": i * 0.5 + 0.4, "word": w} for i, w in enumerate(
+              "bro what is he doing no no no he just crashed the car into the police station lmao".split())]
+          out = m.ai_judge("work/t.mp4", {"name": "Kai Cenat", "login": "kaicenat"}, {"title": "kai crashes car"}, words)
+          print("RESULTADO:", json.dumps(out, ensure_ascii=False))
+          print("TRADUCCION:", m.translate_batch(["bro what is he doing", "he just crashed the car"], "en", "es"))
           PY
