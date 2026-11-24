@@ -1,0 +1,39 @@
+name: Subir aprobados
+
+on:
+  issues:
+    types: [edited]
+  workflow_dispatch:
+    inputs:
+      issue:
+        description: "Numero de la lista de aprobacion"
+        required: true
+
+permissions:
+  issues: write
+  contents: read
+
+concurrency:
+  group: subir
+  cancel-in-progress: false
+
+jobs:
+  subir:
+    if: github.event_name == 'workflow_dispatch' || contains(github.event.issue.labels.*.name, 'aprobacion')
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install -q google-api-python-client google-auth
+      - name: Subir a YouTube
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ISSUE_NUMBER: ${{ github.event.issue.number || github.event.inputs.issue }}
+          YT_CLIENT_ID: ${{ secrets.YT_CLIENT_ID }}
+          YT_CLIENT_SECRET: ${{ secrets.YT_CLIENT_SECRET }}
+          YT_REFRESH_DAILY: ${{ secrets.YT_REFRESH_DAILY }}
+          YT_REFRESH_DIARIO: ${{ secrets.YT_REFRESH_DIARIO }}
+        run: python factory/upload.py

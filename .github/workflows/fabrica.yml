@@ -2,28 +2,26 @@ name: Fabrica diaria
 
 on:
   schedule:
-    - cron: "17 13 * * *"
+    - cron: "31 12 * * *"   # 8:31 en Bolivia
   workflow_dispatch:
     inputs:
       range:
         description: "Periodo de clips (24hr, 7d, 30d)"
         default: "24hr"
-      per_streamer:
-        description: "Clips por streamer"
-        default: "4"
       fresh:
         description: "Rehacer los clips de hoy (si/no)"
         default: "no"
 
 permissions:
   contents: write
+  issues: write
 
 concurrency: fabrica
 
 jobs:
   clips:
     runs-on: ubuntu-latest
-    timeout-minutes: 90
+    timeout-minutes: 120
     steps:
       - uses: actions/checkout@v4
 
@@ -39,7 +37,7 @@ jobs:
 
       - name: Instalar herramientas
         run: |
-          sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg fonts-dejavu-core
+          sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg fonts-dejavu-core tesseract-ocr
           pip install -q -r requirements.txt
 
       - uses: actions/cache@v4
@@ -50,7 +48,6 @@ jobs:
       - name: Fabricar clips
         env:
           RANGE: ${{ github.event.inputs.range || '24hr' }}
-          CLIPS_PER_STREAMER: ${{ github.event.inputs.per_streamer || '4' }}
           FRESH: ${{ github.event.inputs.fresh || 'no' }}
         run: python factory/make_clips.py site
 
@@ -60,3 +57,11 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: ./site
           force_orphan: true
+
+      - name: Crear la lista de aprobacion del dia
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          sleep 20
+          gh label create aprobacion --color 9B28F0 --force
+          gh issue create --title "Aprobar clips $(date -u +%F)" --body-file issue.md --label aprobacion
