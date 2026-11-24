@@ -32,6 +32,7 @@ SITE = pathlib.Path(sys.argv[1] if len(sys.argv) > 1 else "site")
 CFG = json.loads((ROOT / "streamers.json").read_text())
 REPO = os.environ.get("GITHUB_REPOSITORY", "sidekick-factory/fabrica")
 RAW = f"https://raw.githubusercontent.com/{REPO}/gh-pages"
+PAGES = f"https://{REPO.split('/')[0]}.github.io/{REPO.split('/')[1]}"  # se ve en el navegador
 RANGE = os.environ.get("RANGE", "24hr") or "24hr"
 PERIOD = {"24hr": "LAST_DAY", "7d": "LAST_WEEK", "30d": "LAST_MONTH"}.get(RANGE, "LAST_DAY")
 KEEP_DAYS = 7
@@ -758,7 +759,7 @@ def build_issue(manifest):
         lines.append(f"### {i}. {it['streamer']} · {it.get('views')} vistas{tag}")
         lines.append(f"![]({RAW}/clips/{TODAY}/{it['id']}-frame.jpg)")
         for o in it["outputs"]:
-            url = f"{RAW}/clips/{TODAY}/{o['file']}"
+            url = f"{PAGES}/clips/{TODAY}/{o['file']}"
             lines.append(f"- [ ] `{TODAY}/{o['file']}|{o['channel']}` **{CH_NAME[o['channel']]}** "
                          f"([ver video]({url})) · Título: {o['title']}")
         lines.append("")

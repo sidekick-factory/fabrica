@@ -66,12 +66,17 @@ def main():
         return f"- [ ] `{day}/{fname}|{match.group('ch')}`{tag}{rest}"
 
     new_body = LINE.sub(fix, body)
+    # enlaces "ver video" que se reproducen en el navegador (GitHub Pages) en vez de descargarse
+    owner, name = REPO.split("/")
+    new_body = new_body.replace(f"(https://raw.githubusercontent.com/{REPO}/gh-pages/clips/",
+                                f"(https://{owner}.github.io/{name}/clips/")
     if new_body != body:
         path = m.WORK / "issue.md"
         path.write_text(new_body, encoding="utf-8")
         gh("issue", "edit", NUM, "--body-file", str(path))
-        gh("issue", "comment", NUM, "--body", f"🤖 Lista revisada con IA: {len(verdicts)} clips evaluados. "
-           "Títulos mejorados; los marcados ⚠️ no conviene publicarlos.")
+        if verdicts:
+            gh("issue", "comment", NUM, "--body", f"🤖 Lista revisada con IA: {len(verdicts)} clips evaluados. "
+               "Títulos mejorados; los marcados ⚠️ no conviene publicarlos.")
     print("revisados:", len(verdicts))
 
 
