@@ -244,6 +244,8 @@ def _parse(txt):
     if txt.startswith(chr(96) * 3):  # respuesta envuelta en bloque de codigo
         txt = txt.strip(chr(96)).split("\n", 1)[-1]
     i, j = txt.find("{"), txt.rfind("}")
+    if i < 0 or j < i:
+        raise ValueError(f"la respuesta no trae un JSON completo (¿se corto?): {txt[:200]!r}")
     out = json.loads(txt[i:j + 1])
     return out[0] if isinstance(out, list) else out
 
@@ -300,7 +302,7 @@ def _ask_claude(frames, prompt):
     content.append({"type": "text", "text": prompt})
     req = urllib.request.Request(
         "https://api.anthropic.com/v1/messages", method="POST",
-        data=json.dumps({"model": CLAUDE_MODEL, "max_tokens": 800,
+        data=json.dumps({"model": CLAUDE_MODEL, "max_tokens": 2500,
                          "messages": [{"role": "user", "content": content}]}).encode(),
         headers={"x-api-key": ANTHROPIC_KEY, "anthropic-version": "2023-06-01", "content-type": "application/json"})
     r = claude_request(req)
