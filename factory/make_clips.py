@@ -156,11 +156,12 @@ Responde SOLO un JSON:
  "fin": segundo donde termina (justo despues del remate),
  "titulo_en": "titulo en ingles, max 60 caracteres, que describa EXACTAMENTE lo que pasa y genere curiosidad, estilo Shorts virales, con el nombre del streamer, sin hashtags, 1 emoji al final",
  "titulo_es": "lo mismo en espanol natural (no traduccion literal)",
- "angulo": "reaccion" | "curiosidad_del_juego" | "fail" | "drama" | "otro" (curiosidad_del_juego = muestra algo sorprendente que se puede hacer en GTA 6)
+ "angulo": "reaccion" | "curiosidad_del_juego" | "fail" | "drama" | "otro" (curiosidad_del_juego = muestra algo sorprendente que se puede hacer en GTA 6),
+ "idea_tendencia": numero de la idea en tendencia que este clip cumple (o null si ninguna)
 }}
 Ejemplo de buen titulo: "IlloJuan desinstala GTA por accidente en pleno directo 😭". Malo: "IlloJuan en GTA 6".
-Si el clip muestra una mecanica curiosa del juego, usa el formato pregunta: "GTA 6: ¿qué pasa si le das tu arma al cajero?" (este formato ya funciono muy bien en el canal).
-{receta}"""
+Si el clip muestra una mecanica curiosa del juego, usa el formato pregunta: "GTA 6: ¿qué pasa si le das tu arma al cajero?" (formato viral en otros canales).
+{tendencias}{receta}"""
 
 AI = {"calls": 0, "fails": 0, "off": False, "gemini_models": None}
 AI_MAX_CALLS = int(os.environ.get("AI_MAX_CALLS", "45"))  # tope de consultas por corrida (cuida el cupo y los $)
@@ -177,6 +178,26 @@ def receta_text():
     if RECETA.get("evitar"):
         parts.append("Evitar:\n- " + "\n- ".join(RECETA["evitar"][:8]))
     return ("\n" + "\n".join(parts)) if parts else ""
+
+
+TEND_FILE = ROOT / "tendencias.json"
+TEND = json.loads(TEND_FILE.read_text()) if TEND_FILE.exists() else {}
+
+
+def tendencias_text():
+    ideas = TEND.get("ideas") or []
+    if not ideas:
+        return ""
+    lines = [f"{i}. {d.get('idea')} (titulo modelo: {d.get('titulo_modelo_es') or d.get('titulo_modelo_en')})"
+             for i, d in enumerate(ideas[:8], 1)]
+    return ("Ideas que se estan volviendo virales esta semana (si el clip cumple una, usa ese gancho en el titulo, "
+            "con palabras propias):\n" + "\n".join(lines) + "\n")
+
+
+def trend_hit(c, words):
+    """Coincidencia rapida por palabras clave, para priorizar que clips revisa la IA."""
+    text = ((c.get("title") or "") + " " + " ".join(w["word"] for w in (words or []))).lower()
+    return any(k.lower() in text for d in (TEND.get("ideas") or []) for k in (d.get("buscar") or []) if len(k) > 3)
 
 
 def streamer_weight(login):
@@ -298,7 +319,7 @@ def ai_judge(path, st, c, words):
             AI["cap_msg"] = True
         return None
     frames, step = clip_frames(path)
-    prompt = JUDGE_PROMPT.format(n=len(frames), step=step, name=st["name"], receta=receta_text(),
+    prompt = JUDGE_PROMPT.format(n=len(frames), step=step, name=st["name"], receta=receta_text(), tendencias=tendencias_text(),
                                  title=(c.get("title") or "").replace('"', "'"), transcript=transcript_text(words))
     AI["calls"] += 1
     providers = {"gemini": (_ask_gemini, GEMINI_KEY), "claude": (_ask_claude, ANTHROPIC_KEY)}
@@ -675,7 +696,8 @@ def build_issue(manifest):
              "Puedes cambiar el título antes de marcar (edita el texto después de `Título:`).", "",
              "- [ ] `todo` **Aprobar TODOS los de esta lista** (cuidado: publica todo)", ""]
     for i, it in enumerate(manifest, 1):
-        lines.append(f"### {i}. {it['streamer']} · {it.get('views')} vistas")
+        tag = " · 🔥 versión propia de una idea viral" if it.get("tendencia") else ""
+        lines.append(f"### {i}. {it['streamer']} · {it.get('views')} vistas{tag}")
         lines.append(f"![]({RAW}/clips/{TODAY}/{it['id']}-frame.jpg)")
         for o in it["outputs"]:
             url = f"{RAW}/clips/{TODAY}/{o['file']}"
@@ -715,12 +737,15 @@ def judge(st, c):
         if (j.get("gracioso") or 0) < 5 or (j.get("contexto") or 0) < 4:
             print("descartado por la IA (poco gracioso o sin contexto)", cid, flush=True)
             return None
-        return (j.get("gracioso") or 0) * 0.65 + (j.get("contexto") or 0) * 0.35 + base + 1.0
+        c["tendencia"] = bool(j.get("idea_tendencia"))
+        bonus = 1.5 if c["tendencia"] else 0.0  # version propia de una idea viral
+        return (j.get("gracioso") or 0) * 0.65 + (j.get("contexto") or 0) * 0.35 + base + 1.0 + bonus
     # sin IA: mas vistas, mas dialogo y mas reacciones ("jaja", "wtf", "no no no") = mejor
     secs = max(c.get("seconds") or 30, 1)
     density = min(len(words) / secs, 3.5)
     laughs = min(len(FUNNY.findall(" ".join(w["word"] for w in words))), 6)
-    return 4.0 + density * 0.4 + laughs * 0.15 + base
+    c["tendencia"] = trend_hit(c, words)
+    return 4.0 + density * 0.4 + laughs * 0.15 + base + (1.0 if c["tendencia"] else 0.0)
 
 
 def process(st, c, manifest):
@@ -768,7 +793,7 @@ def process(st, c, manifest):
     manifest.append({"id": cid, "streamer": st["name"], "login": st["login"], "title": c["title"],
                      "views": c["views"], "source": url, "game": c.get("game"),
                      "layout": "cam-arriba" if cam else "completo", "spoken_language": spoken,
-                     "ia": j or None,
+                     "ia": j or None, "tendencia": bool(c.get("tendencia")),
                      "game_text": " ".join(w["word"] for w in game_w)[:1500], "streamer_text": " ".join(w["word"] for w in talk)[:1500],
                      "outputs": outputs})
     return True
@@ -810,6 +835,11 @@ def main():
                 judged.append((sc, st, c))
                 per_j[st["login"]] = per_j.get(st["login"], 0) + 1
         judged.sort(key=lambda x: -x[0])
+        # al menos 1 "version propia" de una idea viral por grupo, si hay alguna
+        trend = [x for x in judged if x[2].get("tendencia")]
+        if trend and trend[0] not in judged[:quota]:
+            judged.remove(trend[0])
+            judged.insert(0, trend[0])
         # 2) se fabrican solo los mejores
         made, per = 0, {}
         for sc, st, c in judged:
