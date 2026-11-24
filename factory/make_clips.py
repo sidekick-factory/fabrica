@@ -39,7 +39,7 @@ WORK = pathlib.Path("work")
 W, H, HALF = 1080, 1920, 960
 MIN_SECONDS = int(os.environ.get("MIN_SECONDS", "20"))
 GEMINI_KEY = os.environ.get("GEMINI_API_KEY", "").strip()
-GEMINI_MODELS = ["gemini-flash-latest", "gemini-2.5-flash", "gemini-2.0-flash"]
+GEMINI_MODELS = [m for m in os.environ.get("GEMINI_MODELS", "gemini-3.8-flash,gemini-flash-latest,gemini-3-flash,gemini-2.5-flash").split(",") if m]
 FONT = "DejaVu Sans"
 PURPLE = "&H00FF4DC0&"  # morado brillante (#C04DFF en BGR)
 BLOCKED = ["steamy", "sneaky pic", "nsfw", "nude", "naked", "sex", "boob", "thirst", "18+", "gyatt",
@@ -128,14 +128,14 @@ def nudity(path, frames=16):
         tmp = WORK / "nude.jpg"
         cv2.imwrite(str(tmp), fr)
         try:
-            found = {d["class"] for d in _NUDE.detect(str(tmp)) if d["score"] >= 0.5}
+            found = {d["class"] for d in _NUDE.detect(str(tmp)) if d["score"] >= (0.5 if d["class"] in NUDE_HARD else 0.6)}
         except Exception as e:
             print("nudenet error", e)
             continue
         hard += bool(found & NUDE_HARD)
         soft += bool(found & NUDE_SOFT)
     cap.release()
-    bad = hard >= 1 or soft >= 2
+    bad = hard >= 1 or soft >= 3
     return bad, f"explicito={hard} piel={soft}"
 
 
@@ -188,6 +188,7 @@ def gemini_judge(path, st, c):
                 return out
             except Exception as e:
                 last = e
+                print("gemini", model, "fallo:", str(e)[:200])
         print("gemini fallo", last)
     except Exception as e:
         print("gemini no disponible", e)
