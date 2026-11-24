@@ -546,14 +546,52 @@ def translate(text, src, dst):
     return None
 
 
+def translate_batch(texts, src, dst):
+    """Traduce todas las frases de un clip de una vez con Claude (natural, con jerga de streamer).
+    Si no hay Claude o falla, usa el traductor gratis frase por frase."""
+    if src == dst:
+        return list(texts)
+    todo = [x for x in texts if (x, src, dst) not in _tr_cache and x.strip()]
+    if todo and ANTHROPIC_KEY:
+        names = {"en": "ingles", "es": "espanol latino neutro"}
+        prompt = (f"Traduce estas frases de un streamer jugando GTA del {names.get(src, src)} al {names.get(dst, dst)}. "
+                  "Natural y con la misma energia (jerga y groserias suaves ok), cortas como subtitulos. "
+                  "No traduzcas nombres propios. Responde SOLO un JSON: lista de strings, misma cantidad y orden.\n"
+                  + json.dumps(todo, ensure_ascii=False))
+        try:
+            req = urllib.request.Request(
+                "https://api.anthropic.com/v1/messages", method="POST",
+                data=json.dumps({"model": CLAUDE_MODEL, "max_tokens": 3000,
+                                 "messages": [{"role": "user", "content": prompt}]}).encode(),
+                headers={"x-api-key": ANTHROPIC_KEY, "anthropic-version": "2023-06-01", "content-type": "application/json"})
+            r = json.loads(urllib.request.urlopen(req, timeout=90).read())
+            txt = "".join(b.get("text", "") for b in r.get("content", []))
+            out = json.loads(txt[txt.find("["):txt.rfind("]") + 1])
+            if len(out) == len(todo):
+                for a, b in zip(todo, out):
+                    _tr_cache[(a, src, dst)] = str(b)
+        except Exception as e:
+            print("traduccion con Claude fallo, uso el traductor gratis:", str(e)[:150], flush=True)
+    res = []
+    for x in texts:
+        if (x, src, dst) in _tr_cache:
+            res.append(_tr_cache[(x, src, dst)])
+        else:
+            time.sleep(0.3)  # el traductor gratis permite pocas consultas por segundo
+            res.append(translate(x, src, dst))
+    return res
+
+
 def timed_words(phrase_list, src, dst):
     """Devuelve palabras con tiempo en el idioma destino (reparte el tiempo si se tradujo)."""
     out = []
+    need = [p["text"] for p in phrase_list if not (src == dst and p.get("words"))]
+    tr = dict(zip(need, translate_batch(need, src, dst))) if need else {}
     for p in phrase_list:
         if src == dst and p.get("words"):
             out.extend({"start": w["start"], "end": w["end"], "word": w["word"]} for w in p["words"])
             continue
-        t = translate(p["text"], src, dst)
+        t = tr.get(p["text"])
         if t is None:
             return None
         ws = t.split()
