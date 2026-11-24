@@ -39,11 +39,21 @@ def youtube(channel):
     return build("youtube", "v3", credentials=creds, cache_discovery=False)
 
 
-def upload(channel, path, title, desc):
+def campaigns():
+    """login de Twitch -> nombre de la campana de Content Rewards (factory/streamers.json)."""
+    try:
+        cfg = json.load(open(os.path.join(os.path.dirname(__file__), "streamers.json")))
+        return {s["login"]: s["campaign"] for s in cfg["streamers"] if s.get("campaign")}
+    except Exception as e:
+        print("no se pudo leer streamers.json", e)
+        return {}
+
+
+def upload(channel, path, title, desc, privacy="public"):
     from googleapiclient.http import MediaFileUpload
     tags = [t.lstrip("#") for t in re.findall(r"#\w+", title + " " + desc)][:15]
     body = {"snippet": {"title": title[:100], "description": desc[:4900], "tags": tags, "categoryId": "20"},
-            "status": {"privacyStatus": "public", "selfDeclaredMadeForKids": False}}
+            "status": {"privacyStatus": privacy, "selfDeclaredMadeForKids": False}}
     req = youtube(channel).videos().insert(part="snippet,status", body=body,
                                            media_body=MediaFileUpload(path, chunksize=-1, resumable=True))
     resp = None
@@ -61,25 +71,33 @@ def main():
     if all_ok:
         body = re.sub(r"^- \[ \] `(?!todo)", "- [x] `", body, flags=re.M)
     manifests, results = {}, []
+    camp = campaigns()
     for m in list(LINE.finditer(body)):
         orig_rest = rest = m.group("rest")
         if RETRY.match(rest):  # quedo pendiente por el tope diario de YouTube: se reintenta
             rest = " " + RETRY.sub("", rest, count=1)
-        elif "✅" in rest or "❌" in rest:
+        elif "✅" in rest or "❌" in rest or "🔒" in rest:
             continue
         key, ch = m.group("key"), m.group("ch")
         day, fname = key.split("/", 1)
         if day not in manifests:
             manifests[day] = json.loads(urllib.request.urlopen(f"{RAW}/{day}/manifest.json").read())
-        out = next((o for it in manifests[day] for o in it["outputs"] if o["file"] == fname), None)
+        clip = next((it for it in manifests[day] if any(o["file"] == fname for o in it["outputs"])), None)
+        out = next((o for o in (clip or {}).get("outputs", []) if o["file"] == fname), None)
         if not out:
             continue
+        campaign = camp.get(clip.get("login"))
         title = rest.split("Título:", 1)[1].strip() if "Título:" in rest else out["title"]
         try:
             tmp = os.path.join(tempfile.gettempdir(), fname)
             urllib.request.urlretrieve(f"{RAW}/{key}", tmp)
-            vid = upload(ch, tmp, title, out["desc"])
-            mark = f"✅ https://youtube.com/shorts/{vid}"
+            # Content Rewards solo acepta clips enviados en los 30 min despues de publicarse:
+            # los de campana se suben en privado y se publican + envian juntos a la hora fija.
+            vid = upload(ch, tmp, title, out["desc"], privacy="private" if campaign else "public")
+            if campaign:
+                mark = f"🔒 https://youtube.com/shorts/{vid} · privado, se publica y envia a la campana \"{campaign}\" a la hora fija"
+            else:
+                mark = f"✅ https://youtube.com/shorts/{vid}"
             results.append(f"- {mark} · {title}")
         except Exception as e:
             err = str(e)
