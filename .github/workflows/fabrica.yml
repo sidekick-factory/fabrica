@@ -51,6 +51,7 @@ jobs:
           RANGE: ${{ github.event.inputs.range || '24hr' }}
           FRESH: ${{ github.event.inputs.fresh || 'no' }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: python factory/make_clips.py site
 
       - name: Publicar galeria
