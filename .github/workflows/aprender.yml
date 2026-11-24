@@ -1,0 +1,37 @@
+name: Aprender de los resultados
+
+on:
+  schedule:
+    - cron: "7 12 * * *"   # 8:07 en Bolivia, antes de la fabrica
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  issues: read
+
+concurrency: aprender
+
+jobs:
+  aprender:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install -q google-api-python-client google-auth cryptography google-genai
+      - name: Revisar vistas y actualizar la receta
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          YT_CLIENT_ID: ${{ secrets.YT_CLIENT_ID }}
+          YT_CLIENT_SECRET: ${{ secrets.YT_CLIENT_SECRET }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: python factory/aprender.py
+      - name: Guardar lo aprendido
+        run: |
+          git config user.name "fabrica-bot"
+          git config user.email "fabrica-bot@users.noreply.github.com"
+          git add factory/receta.json factory/historial.json
+          git diff --cached --quiet || (git commit -m "La fabrica aprendio de los resultados" && git push)
