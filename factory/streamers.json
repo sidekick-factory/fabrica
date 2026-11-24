@@ -1,5 +1,18 @@
 {
+ "daily": {"en": 6, "es": 7},
+ "max_per_streamer": 3,
  "streamers": [
-  {"login": "kaicenat", "name": "Kai Cenat", "hashtags": ["#KaiCenat", "#GTA6", "#GTAVI"], "campaign": "Kai Cenat - $10,000 GTA 6 Pool Campaign", "languages": ["en", "es"]}
+  {"group": "en", "login": "kaicenat", "name": "Kai Cenat", "hashtags": ["#KaiCenat"], "outputs": ["en", "es"], "campaign": "Kai Cenat - $10,000 GTA 6 Pool Campaign"},
+  {"group": "en", "login": "lacy", "name": "Lacy", "hashtags": ["#Lacy"], "outputs": ["en", "es"], "campaign": "$12,500 LACY GTA VI Marathon Pool Campaign"},
+  {"group": "en", "login": "yourragegaming", "name": "YourRAGE", "hashtags": ["#YourRAGE"], "outputs": ["en", "es"], "campaign": "YourRAGE $7,500 Pool Campaign"},
+
+  {"group": "es", "login": "auronplay", "name": "AuronPlay", "hashtags": ["#AuronPlay"], "outputs": ["es"]},
+  {"group": "es", "login": "ibai", "name": "Ibai", "hashtags": ["#Ibai"], "outputs": ["es"]},
+  {"group": "es", "login": "elrubius", "name": "Rubius", "hashtags": ["#Rubius"], "outputs": ["es"]},
+  {"group": "es", "login": "illojuan", "name": "IlloJuan", "hashtags": ["#IlloJuan"], "outputs": ["es"]},
+  {"group": "es", "login": "spreen", "name": "Spreen", "hashtags": ["#Spreen"], "outputs": ["es"]},
+  {"group": "es", "login": "rivers_gg", "name": "Rivers", "hashtags": ["#Rivers"], "outputs": ["es"]},
+  {"group": "es", "login": "thegrefg", "name": "TheGrefg", "hashtags": ["#TheGrefg"], "outputs": ["es"]},
+  {"group": "es", "login": "elmariana", "name": "El Mariana", "hashtags": ["#ElMariana"], "outputs": ["es"]}
  ]
 }

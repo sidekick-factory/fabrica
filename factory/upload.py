@@ -1,0 +1,82 @@
+"""Sube a YouTube los clips que Stephano marco en la lista de aprobacion (issue de GitHub)."""
+import json
+import os
+import re
+import subprocess
+import tempfile
+import urllib.request
+
+REPO = os.environ["GITHUB_REPOSITORY"]
+NUM = os.environ["ISSUE_NUMBER"]
+RAW = f"https://raw.githubusercontent.com/{REPO}/gh-pages/clips"
+LINE = re.compile(r"^- \[[xX]\] `(?P<key>[^`|]+)\|(?P<ch>daily|diario)`(?P<rest>.*)$", re.M)
+TODO = re.compile(r"^- \[[xX]\] `todo`", re.M)
+
+
+def gh(*args, inp=None):
+    return subprocess.run(["gh", *args, "--repo", REPO], input=inp, capture_output=True, text=True, check=True).stdout
+
+
+def youtube(channel):
+    from google.oauth2.credentials import Credentials
+    from googleapiclient.discovery import build
+    creds = Credentials(None, refresh_token=os.environ[f"YT_REFRESH_{channel.upper()}"],
+                        token_uri="https://oauth2.googleapis.com/token",
+                        client_id=os.environ["YT_CLIENT_ID"], client_secret=os.environ["YT_CLIENT_SECRET"],
+                        scopes=["https://www.googleapis.com/auth/youtube.upload"])
+    return build("youtube", "v3", credentials=creds, cache_discovery=False)
+
+
+def upload(channel, path, title, desc):
+    from googleapiclient.http import MediaFileUpload
+    tags = [t.lstrip("#") for t in re.findall(r"#\w+", title + " " + desc)][:15]
+    body = {"snippet": {"title": title[:100], "description": desc[:4900], "tags": tags, "categoryId": "20"},
+            "status": {"privacyStatus": "public", "selfDeclaredMadeForKids": False}}
+    req = youtube(channel).videos().insert(part="snippet,status", body=body,
+                                           media_body=MediaFileUpload(path, chunksize=-1, resumable=True))
+    resp = None
+    while resp is None:
+        _, resp = req.next_chunk()
+    return resp["id"]
+
+
+def main():
+    body = json.loads(gh("issue", "view", NUM, "--json", "body"))["body"]
+    all_ok = bool(TODO.search(body))
+    if all_ok:
+        body = re.sub(r"^- \[ \] `(?!todo)", "- [x] `", body, flags=re.M)
+    manifests, results = {}, []
+    for m in list(LINE.finditer(body)):
+        rest = m.group("rest")
+        if "✅" in rest or "❌" in rest:
+            continue
+        key, ch = m.group("key"), m.group("ch")
+        day, fname = key.split("/", 1)
+        if day not in manifests:
+            manifests[day] = json.loads(urllib.request.urlopen(f"{RAW}/{day}/manifest.json").read())
+        out = next((o for it in manifests[day] for o in it["outputs"] if o["file"] == fname), None)
+        if not out:
+            continue
+        title = rest.split("Título:", 1)[1].strip() if "Título:" in rest else out["title"]
+        try:
+            tmp = os.path.join(tempfile.gettempdir(), fname)
+            urllib.request.urlretrieve(f"{RAW}/{key}", tmp)
+            vid = upload(ch, tmp, title, out["desc"])
+            mark = f"✅ https://youtube.com/shorts/{vid}"
+            results.append(f"- {mark} · {title}")
+        except Exception as e:
+            mark = f"❌ error: {str(e)[:150]}"
+            results.append(f"- {mark} · {fname}")
+        body = body.replace(m.group(0), m.group(0).replace("`" + rest, "`" + f" {mark} ·" + rest, 1), 1)
+        if all_ok is False:
+            pass
+    if results:
+        with tempfile.NamedTemporaryFile("w", suffix=".md", delete=False) as f:
+            f.write(body)
+        gh("issue", "edit", NUM, "--body-file", f.name)
+        gh("issue", "comment", NUM, "--body", "Subidos:\n" + "\n".join(results))
+    print("\n".join(results) or "nada nuevo que subir")
+
+
+if __name__ == "__main__":
+    main()
