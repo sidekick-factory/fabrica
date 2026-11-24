@@ -27,7 +27,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-      - run: pip install -q google-api-python-client google-auth
+      - run: pip install -q google-api-python-client google-auth cryptography
       - name: Subir a YouTube
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

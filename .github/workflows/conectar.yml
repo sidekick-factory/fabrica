@@ -1,0 +1,40 @@
+name: Conectar canal de YouTube
+
+on:
+  workflow_dispatch:
+    inputs:
+      canal:
+        description: "daily o diario"
+        required: true
+      codigo:
+        description: "Pega aqui la direccion completa que te dio Google"
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  conectar:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ocultar el codigo en los registros
+        run: echo "::add-mask::${{ github.event.inputs.codigo }}"
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install -q cryptography
+      - name: Guardar permiso cifrado
+        env:
+          CANAL: ${{ github.event.inputs.canal }}
+          CODIGO: ${{ github.event.inputs.codigo }}
+          YT_CLIENT_ID: ${{ secrets.YT_CLIENT_ID }}
+          YT_CLIENT_SECRET: ${{ secrets.YT_CLIENT_SECRET }}
+        run: python factory/conectar.py
+      - name: Guardar en el repositorio
+        run: |
+          git config user.name "sidekick-factory"
+          git config user.email "sidekick-factory@users.noreply.github.com"
+          git add tokens
+          git commit -m "Conectar canal ${{ github.event.inputs.canal }}"
+          git push
