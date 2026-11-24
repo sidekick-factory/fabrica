@@ -17,12 +17,24 @@ def gh(*args, inp=None):
     return subprocess.run(["gh", *args, "--repo", REPO], input=inp, capture_output=True, text=True, check=True).stdout
 
 
+def refresh_token(channel):
+    env = os.environ.get(f"YT_REFRESH_{channel.upper()}")
+    if env:
+        return env
+    import base64
+    import hashlib
+    from cryptography.fernet import Fernet
+    k = base64.urlsafe_b64encode(hashlib.sha256((os.environ["YT_CLIENT_SECRET"] + "|sidekick").encode()).digest())
+    with open(f"tokens/{channel}.enc", "rb") as f:
+        return Fernet(k).decrypt(f.read()).decode()
+
+
 def youtube(channel):
     from google.oauth2.credentials import Credentials
     from googleapiclient.discovery import build
-    creds = Credentials(None, refresh_token=os.environ[f"YT_REFRESH_{channel.upper()}"],
+    creds = Credentials(None, refresh_token=refresh_token(channel),
                         token_uri="https://oauth2.googleapis.com/token",
-                        client_id=os.environ["YT_CLIENT_ID"], client_secret=os.environ["YT_CLIENT_SECRET"],
+                        client_id=os.environ["YT_CLIENT_ID"].strip(), client_secret=os.environ["YT_CLIENT_SECRET"].strip(),
                         scopes=["https://www.googleapis.com/auth/youtube.upload"])
     return build("youtube", "v3", credentials=creds, cache_discovery=False)
 
