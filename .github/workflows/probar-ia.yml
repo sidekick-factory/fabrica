@@ -1,0 +1,44 @@
+name: Probar IA
+
+on:
+  workflow_dispatch:
+
+jobs:
+  probar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Probar Claude con texto y con foto
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          python3 - <<'PY'
+          import base64, json, os, struct, urllib.request, urllib.error, zlib
+          key = os.environ["ANTHROPIC_API_KEY"].strip()
+          print("clave presente:", bool(key), "largo:", len(key), "prefijo:", key[:10])
+          def png():
+              raw = b"".join(b"\x00" + b"\xff\x00\x00" * 64 for _ in range(64))
+              def chunk(t, d):
+                  return struct.pack(">I", len(d)) + t + d + struct.pack(">I", zlib.crc32(t + d) & 0xffffffff)
+              return b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", 64, 64, 8, 2, 0, 0, 0)) + chunk(b"IDAT", zlib.compress(raw)) + chunk(b"IEND", b"")
+          tests = [
+              ("haiku texto", "claude-haiku-5-5", [{"type": "text", "text": "Responde solo el JSON {\"ok\": true}"}]),
+              ("haiku foto", "claude-haiku-5-5", [{"type": "image", "source": {"type": "base64", "media_type": "image/png", "data": base64.b64encode(png()).decode()}},
+                                                 {"type": "text", "text": "De que color es la imagen? Responde solo JSON {\"color\": \"...\"}"}]),
+              ("sonnet foto", "claude-sonnet-5-5", [{"type": "image", "source": {"type": "base64", "media_type": "image/png", "data": base64.b64encode(png()).decode()}},
+                                                  {"type": "text", "text": "De que color es la imagen? Responde solo JSON {\"color\": \"...\"}"}]),
+          ]
+          for name, model, content in tests:
+              req = urllib.request.Request("https://api.anthropic.com/v1/messages", method="POST",
+                  data=json.dumps({"model": model, "max_tokens": 200, "messages": [{"role": "user", "content": content}]}).encode(),
+                  headers={"x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json"})
+              try:
+                  resp = urllib.request.urlopen(req, timeout=60)
+                  raw = resp.read()
+                  print("==", name, "status", resp.status, "headers", dict(resp.headers).get("Content-Type"), "|", raw[:500])
+              except urllib.error.HTTPError as e:
+                  print("==", name, "HTTP", e.code, e.read()[:500])
+              except Exception as e:
+                  print("==", name, "ERROR", type(e).__name__, e)
+          PY
