@@ -151,7 +151,7 @@ Responde SOLO un JSON:
  "gracioso": 1-10 (que tan divertido/sorprendente es para alguien que no conoce el stream),
  "contexto": 1-10 (se entiende lo que pasa sin haber visto el directo),
  "desnudos": "ninguno" | "leve" | "explicito" (pechos, genitales o sexo visibles = explicito; ropa interior o escenas sugerentes = leve),
- "apto_monetizar": true/false (sin desnudos explicitos, sin sexo, sin odio, sin violencia real),
+ "apto_monetizar": true/false (false si hay desnudos explicitos, sexo, conversaciones o bromas sexuales explicitas, odio o violencia real),
  "inicio": segundo donde empieza la mejor parte (con algo de contexto antes del chiste),
  "fin": segundo donde termina (justo despues del remate),
  "titulo_en": "titulo en ingles, max 60 caracteres, que describa EXACTAMENTE lo que pasa y genere curiosidad, estilo Shorts virales, con el nombre del streamer, sin hashtags, 1 emoji al final",
