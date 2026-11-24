@@ -20,6 +20,7 @@ import re
 import shutil
 import subprocess
 import sys
+import time
 import urllib.request
 
 import cv2
@@ -39,7 +40,7 @@ WORK = pathlib.Path("work")
 W, H, HALF = 1080, 1920, 960
 MIN_SECONDS = int(os.environ.get("MIN_SECONDS", "20"))
 GEMINI_KEY = os.environ.get("GEMINI_API_KEY", "").strip()
-GEMINI_MODELS = [m for m in os.environ.get("GEMINI_MODELS", "gemini-3.8-flash,gemini-3.8-flash-lite").split(",") if m]
+JUDGE_MINUTES = float(os.environ.get("JUDGE_MINUTES", "35"))  # tiempo maximo del juez por grupo
 FONT = "DejaVu Sans"
 PURPLE = "&H00FF4DC0&"  # morado brillante (#C04DFF en BGR)
 BLOCKED = ["steamy", "sneaky pic", "nsfw", "nude", "naked", "sex", "boob", "thirst", "18+", "gyatt",
@@ -140,13 +141,17 @@ def nudity(path, frames=16):
 
 
 JUDGE_PROMPT = """Eres editor de un canal de YouTube Shorts de momentos graciosos de streamers jugando GTA.
-Mira y escucha este clip de {name} (titulo original del clip: "{title}") y responde SOLO un JSON:
+Te paso {n} fotos del clip de {name} (en orden, una cada {step:.1f} s), el titulo original del clip ("{title}")
+y la transcripcion del audio con tiempos en segundos:
+{transcript}
+
+Responde SOLO un JSON:
 {{
  "que_pasa": "una frase concreta de lo que ocurre (quien hace que y por que es gracioso)",
  "gracioso": 1-10 (que tan divertido/sorprendente es para alguien que no conoce el stream),
  "contexto": 1-10 (se entiende lo que pasa sin haber visto el directo),
- "desnudos": "ninguno" | "leve" | "explicito" (pechos, genitales o sexo visibles = explicito; strippers con ropa interior o escenas sugerentes = leve),
- "apto_monetizar": true/false (YouTube lo monetizaria: sin desnudos explicitos, sin sexo, sin odio, sin violencia real),
+ "desnudos": "ninguno" | "leve" | "explicito" (pechos, genitales o sexo visibles = explicito; ropa interior o escenas sugerentes = leve),
+ "apto_monetizar": true/false (sin desnudos explicitos, sin sexo, sin odio, sin violencia real),
  "inicio": segundo donde empieza la mejor parte (con algo de contexto antes del chiste),
  "fin": segundo donde termina (justo despues del remate),
  "titulo_en": "titulo en ingles, max 60 caracteres, que describa EXACTAMENTE lo que pasa y genere curiosidad, estilo Shorts virales, con el nombre del streamer, sin hashtags, 1 emoji al final",
@@ -154,53 +159,141 @@ Mira y escucha este clip de {name} (titulo original del clip: "{title}") y respo
 }}
 Ejemplo de buen titulo: "IlloJuan desinstala GTA por accidente en pleno directo 😭". Malo: "IlloJuan en GTA 6"."""
 
+AI = {"calls": 0, "fails": 0, "off": False, "gemini_models": None}
+AI_MAX_CALLS = int(os.environ.get("AI_MAX_CALLS", "18"))  # el nivel gratis de Gemini da pocas consultas al dia
+ANTHROPIC_KEY = os.environ.get("ANTHROPIC_API_KEY", "").strip()  # opcion B: Claude (si algun dia se agrega la clave)
+CLAUDE_MODEL = os.environ.get("CLAUDE_MODEL", "claude-haiku-5-5")
 
-def gemini_judge(path, st, c):
-    """Gemini (gratis) mira el clip entero y decide si vale la pena, la mejor parte y el titulo."""
-    if not GEMINI_KEY:
+
+def clip_frames(path, n=8, width=512):
+    """Fotos chicas del clip para que la IA 'vea' sin gastar tanto como un video entero."""
+    cap = cv2.VideoCapture(str(path))
+    total = int(cap.get(cv2.CAP_PROP_FRAME_COUNT)) or 1
+    fps = cap.get(cv2.CAP_PROP_FPS) or 30
+    out = []
+    for i in range(n):
+        cap.set(cv2.CAP_PROP_POS_FRAMES, int(total * (i + 0.5) / n))
+        ok, fr = cap.read()
+        if not ok:
+            continue
+        h, w = fr.shape[:2]
+        fr = cv2.resize(fr, (width, int(h * width / w)))
+        out.append(cv2.imencode(".jpg", fr, [cv2.IMWRITE_JPEG_QUALITY, 70])[1].tobytes())
+    cap.release()
+    return out, (total / fps) / max(n, 1)
+
+
+def transcript_text(words, maxlen=2500):
+    lines, cur, t0 = [], [], None
+    for w in words:
+        if t0 is None:
+            t0 = w["start"]
+        cur.append(w["word"])
+        if len(cur) >= 12 or w["word"].endswith((".", "?", "!")):
+            lines.append(f"[{t0:.1f}] " + " ".join(cur))
+            cur, t0 = [], None
+    if cur:
+        lines.append(f"[{t0:.1f}] " + " ".join(cur))
+    return "\n".join(lines)[:maxlen] or "(sin dialogo)"
+
+
+def _parse(txt):
+    txt = (txt or "").strip()
+    if txt.startswith(chr(96) * 3):  # respuesta envuelta en bloque de codigo
+        txt = txt.strip(chr(96)).split("\n", 1)[-1]
+    i, j = txt.find("{"), txt.rfind("}")
+    out = json.loads(txt[i:j + 1])
+    return out[0] if isinstance(out, list) else out
+
+
+def _gemini_models(client):
+    if AI["gemini_models"] is None:
+        env = [m for m in os.environ.get("GEMINI_MODELS", "").split(",") if m]
+        found = []
+        try:
+            for m in client.models.list():
+                name = m.name.split("/")[-1]
+                if "flash" in name and not any(k in name for k in ("image", "tts", "live", "audio", "embed", "preview-tts")):
+                    found.append(name)
+        except Exception as e:
+            print("no se pudo listar modelos de gemini", e, flush=True)
+        def ver(n):
+            nums = re.findall(r"\d+(?:\.\d+)?", n)
+            return float(nums[0]) if nums else 0
+        found.sort(key=lambda n: (-ver(n), "lite" in n, "preview" in n, len(n)))
+        AI["gemini_models"] = (env or found[:3] or ["gemini-3.8-flash"])
+        print("modelos de gemini a usar:", AI["gemini_models"], flush=True)
+    return AI["gemini_models"]
+
+
+def _ask_gemini(frames, prompt):
+    from google import genai
+    from google.genai import types
+    client = genai.Client(api_key=GEMINI_KEY)
+    parts = [types.Part.from_bytes(data=f, mime_type="image/jpeg") for f in frames] + [prompt]
+    last = None
+    for model in _gemini_models(client):
+        for attempt in range(2):
+            try:
+                r = client.models.generate_content(
+                    model=model, contents=parts,
+                    config=types.GenerateContentConfig(response_mime_type="application/json", temperature=0.4))
+                out = _parse(r.text)
+                out["modelo"] = model
+                return out
+            except Exception as e:
+                last, msg = e, str(e)
+                print("gemini", model, "fallo:", msg[:160], flush=True)
+                if "503" in msg or "UNAVAILABLE" in msg:
+                    time.sleep(10)
+                    continue
+                break  # 404 (modelo no existe) o 429 (sin cupo): probar el siguiente modelo
+    raise RuntimeError(str(last)[:300])
+
+
+def _ask_claude(frames, prompt):
+    import base64
+    content = [{"type": "image", "source": {"type": "base64", "media_type": "image/jpeg",
+                                            "data": base64.b64encode(f).decode()}} for f in frames]
+    content.append({"type": "text", "text": prompt})
+    req = urllib.request.Request(
+        "https://api.anthropic.com/v1/messages", method="POST",
+        data=json.dumps({"model": CLAUDE_MODEL, "max_tokens": 800,
+                         "messages": [{"role": "user", "content": content}]}).encode(),
+        headers={"x-api-key": ANTHROPIC_KEY, "anthropic-version": "2023-06-01", "content-type": "application/json"})
+    r = json.loads(urllib.request.urlopen(req, timeout=90).read())
+    out = _parse("".join(b.get("text", "") for b in r.get("content", [])))
+    out["modelo"] = CLAUDE_MODEL
+    return out
+
+
+def ai_judge(path, st, c, words):
+    """La IA (Gemini gratis; Claude como opcion B) mira fotos del clip + lee lo que se dice
+    y decide si vale la pena, la mejor parte y el titulo. Si no hay cupo, la fabrica sigue sin IA."""
+    if AI["off"] or not (GEMINI_KEY or ANTHROPIC_KEY):
         return None
-    import time
-    try:
-        from google import genai
-        from google.genai import types
-        client = genai.Client(api_key=GEMINI_KEY)
-        f = client.files.upload(file=str(path))
-        for _ in range(40):
-            f = client.files.get(name=f.name)
-            state = getattr(f.state, "name", str(f.state))
-            if "ACTIVE" in state:
-                break
-            if "FAILED" in state:
-                raise RuntimeError("gemini no pudo procesar el video")
-            time.sleep(3)
-        prompt = JUDGE_PROMPT.format(name=st["name"], title=(c.get("title") or "").replace('"', "'"))
-        last = None
-        for model in GEMINI_MODELS:
-            for attempt in range(4):
-                try:
-                    r = client.models.generate_content(
-                        model=model, contents=[f, prompt],
-                        config=types.GenerateContentConfig(response_mime_type="application/json", temperature=0.4))
-                    out = json.loads(r.text)
-                    if isinstance(out, list):
-                        out = out[0]
-                    out["modelo"] = model
-                    try:
-                        client.files.delete(name=f.name)
-                    except Exception:
-                        pass
-                    return out
-                except Exception as e:
-                    last = e
-                    msg = str(e)
-                    print("gemini", model, "intento", attempt + 1, "fallo:", msg[:160], flush=True)
-                    if any(k in msg for k in ("503", "UNAVAILABLE", "429", "RESOURCE_EXHAUSTED", "500")) and attempt < 3:
-                        time.sleep(15 * (attempt + 1))  # Google saturado o limite por minuto: esperar y reintentar
-                        continue
-                    break
-        print("gemini fallo", last, flush=True)
-    except Exception as e:
-        print("gemini no disponible", e, flush=True)
+    if AI["calls"] >= AI_MAX_CALLS:
+        if not AI.get("cap_msg"):
+            print("tope de consultas a la IA alcanzado; el resto se elige por vistas", flush=True)
+            AI["cap_msg"] = True
+        return None
+    frames, step = clip_frames(path)
+    prompt = JUDGE_PROMPT.format(n=len(frames), step=step, name=st["name"],
+                                 title=(c.get("title") or "").replace('"', "'"), transcript=transcript_text(words))
+    AI["calls"] += 1
+    for name, fn, ok in (("gemini", _ask_gemini, GEMINI_KEY), ("claude", _ask_claude, ANTHROPIC_KEY)):
+        if not ok:
+            continue
+        try:
+            out = fn(frames, prompt)
+            AI["fails"] = 0
+            return out
+        except Exception as e:
+            print("IA", name, "no respondio:", str(e)[:200], flush=True)
+    AI["fails"] += 1
+    if AI["fails"] >= 3:
+        AI["off"] = True
+        print("la IA fallo 3 veces seguidas (sin cupo o saturada): se apaga por hoy", flush=True)
     return None
 
 
@@ -571,31 +664,41 @@ def build_issue(manifest):
 
 
 # ---------------- main ----------------
+FUNNY = re.compile(r"\b(ja(ja)+|je(je)+|lol|lmao|wtf|bro|nah|what|que|no+o+|dios|madre)\b", re.I)
+
+
 def judge(st, c):
     """Descarga y evalua el clip. Devuelve un puntaje (o None si se descarta)."""
+    import math
     cid, url = c["id"], c["url"]
     raw = WORK / f"{cid}.mp4"
     if not raw.exists():
         run(["yt-dlp", "-q", "-f", "best[height<=1080]/best", "-o", raw, url])
     bad, why = nudity(raw)
     if bad:
-        print("descartado por desnudos:", cid, why)
+        print("descartado por desnudos:", cid, why, flush=True)
         return None
-    j = gemini_judge(raw, st, c)
+    words, _ = transcribe(raw)
+    if len(words) < 6:
+        print("descartado: casi no hay dialogo", cid, flush=True)
+        return None
+    j = ai_judge(raw, st, c, words)
     c["ia"] = j
+    base = math.log10(max(c["views"], 10)) * 0.4
     if j:
-        print("IA:", cid, json.dumps(j, ensure_ascii=False)[:400])
+        print("IA:", cid, json.dumps(j, ensure_ascii=False)[:400], flush=True)
         if j.get("desnudos") == "explicito" or j.get("apto_monetizar") is False:
-            print("descartado por la IA (no monetizable)", cid)
+            print("descartado por la IA (no monetizable)", cid, flush=True)
             return None
         if (j.get("gracioso") or 0) < 5 or (j.get("contexto") or 0) < 4:
-            print("descartado por la IA (poco gracioso o sin contexto)", cid)
+            print("descartado por la IA (poco gracioso o sin contexto)", cid, flush=True)
             return None
-        score = (j.get("gracioso") or 0) * 0.65 + (j.get("contexto") or 0) * 0.35
-    else:
-        score = 5.0
-    import math
-    return score + math.log10(max(c["views"], 10)) * 0.4
+        return (j.get("gracioso") or 0) * 0.65 + (j.get("contexto") or 0) * 0.35 + base + 1.0
+    # sin IA: mas vistas, mas dialogo y mas reacciones ("jaja", "wtf", "no no no") = mejor
+    secs = max(c.get("seconds") or 30, 1)
+    density = min(len(words) / secs, 3.5)
+    laughs = min(len(FUNNY.findall(" ".join(w["word"] for w in words))), 6)
+    return 4.0 + density * 0.4 + laughs * 0.15 + base
 
 
 def process(st, c, manifest):
@@ -667,8 +770,9 @@ def main():
         pool.sort(key=lambda p: -p[1]["views"])
         # 1) el juez revisa ~3 veces mas clips de los que se necesitan
         judged, per_j = [], {}
+        t0 = time.time()
         for st, c in pool:
-            if len(judged) >= quota * 3:
+            if len(judged) >= quota * 2 or time.time() - t0 > JUDGE_MINUTES * 60:
                 break
             if c["id"] in done or per_j.get(st["login"], 0) >= CFG.get("max_per_streamer", 3) * 2:
                 continue
