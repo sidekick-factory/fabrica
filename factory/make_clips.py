@@ -648,6 +648,7 @@ def main():
     mf = DAY / "manifest.json"
     manifest = json.loads(mf.read_text()) if mf.exists() else []
     done = {m["id"] for m in manifest}
+    before = set(done)  # clips de corridas anteriores del mismo dia (ya estan en otra lista)
     for group, quota in CFG["daily"].items():
         pool = []
         for st in [s for s in CFG["streamers"] if s["group"] == group]:
@@ -690,7 +691,9 @@ def main():
                 print("clip fallo", c["id"], ex, flush=True)
     mf.write_text(json.dumps(manifest, ensure_ascii=False, indent=1))
     build_index()
-    pathlib.Path("issue.md").write_text(build_issue(manifest), encoding="utf-8")
+    new = [m for m in manifest if m["id"] not in before]
+    pathlib.Path("issue.md").write_text(build_issue(new), encoding="utf-8")
+    pathlib.Path("new_count").write_text(str(len(new)))
     print(f"listo: {len(manifest)} clips en {DAY}")
 
 
