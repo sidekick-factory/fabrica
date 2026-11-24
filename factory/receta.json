@@ -1,1 +1,32 @@
-{"lecciones": ["Titulos tipo pregunta de curiosidad del juego (\"GTA 6: ¿que pasa si...?\") se dispararon en Sidekick Diario."], "evitar": [], "peso_streamer": {}}
+{
+ "lecciones": [
+  "Hay muy pocos datos: 18 Shorts, 0-4 vistas cada uno, 9-10 horas desde la publicación. Todo lo de abajo es una pista débil, no una conclusión.",
+  "Los títulos con un hecho concreto sacaron más vistas: promedio de unas 3,1 con 'mató a un perro', 'discute con su novia' o 'la novia lo descubrió'. Los genéricos 'X en GTA 6 😂' sacaron unas 1,2.",
+  "Poner en el título qué pasa exactamente (acción + persona/objeto) en vez de 'X en GTA 6'.",
+  "Los títulos de gancho emocional ('no puede creer...', 'lo descubrió') funcionan igual o mejor que los descriptivos. Se pueden seguir usando.",
+  "Mantener el título en inglés y en español con el mismo gancho. Con el mismo clip, Daily igualó o superó a Diario (4 vs 4, 3 vs 3, 4 vs 2, 3 vs 2), pero la diferencia es ruido.",
+  "Cuidar la forma del título: el único con minúsculas y sin emoji ('kai cenat gta6 novia') sacó 0 vistas. Usar mayúsculas bien puestas, frase completa y un emoji.",
+  "No hay diferencia clara entre Lacy y Kai Cenat con clips parecidos, así que no cambiar los pesos todavía.",
+  "La regla actual de 'preguntas de curiosidad del juego' no se puede comprobar con estos datos, porque ningún Short de esta lista es de ese tipo. Mantenerla solo como hipótesis a probar.",
+  "Rellenar 'angulo' y 'gracia' en cada clip: ahora todos están en None y así no se pueden comparar patrones."
+ ],
+ "evitar": [
+  "Títulos genéricos tipo 'X in GTA 6 😂' sin decir qué pasa (0-3 vistas, sobre todo los de Kai Cenat).",
+  "Títulos en minúsculas, sin emoji o con solo palabras clave ('kai cenat gta6 novia').",
+  "Publicar varios clips casi idénticos con el mismo título: hay 4 'Lacy en/in GTA 6' y 4 'Kai Cenat en/in GTA 6' en total.",
+  "Sacar conclusiones de streamers o idiomas con menos de unas 100 vistas por grupo."
+ ],
+ "peso_streamer": {
+  "lacy": 1.0,
+  "kaicenat": 1.0,
+  "illojuan": 1.0
+ },
+ "pruebas": [
+  "Con el mismo clip, publicar un título concreto con acción frente a uno genérico, en ambos canales, y comparar vistas por hora a las 24 h.",
+  "Probar 2 clips de curiosidad del juego ('GTA 6: ¿qué pasa si...?') por canal, para comprobar si la regla actual vale también en Daily.",
+  "Probar 3 clips de IlloJuan en Diario con título concreto, porque solo hay 1 dato y no se sabe si ese streamer funciona en español."
+ ],
+ "resumen": "Con tan pocos datos (máximo 4 vistas por Short) solo se ve una pista: los títulos que cuentan qué pasa, como 'mató a un perro' o 'la novia lo descubrió', sacaron más vistas que los genéricos 'X en GTA 6 😂'. Por ahora no cambiamos los pesos de los streamers, usamos títulos concretos y la próxima semana probamos curiosidad del juego y títulos con acción.",
+ "actualizado": "2026-11-24",
+ "shorts_analizados": 18
+}
