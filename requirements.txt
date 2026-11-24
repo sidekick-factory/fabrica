@@ -3,3 +3,4 @@ faster-whisper
 opencv-python-headless<5
 numpy
 deep-translator
+pytesseract
