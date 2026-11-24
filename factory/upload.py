@@ -52,6 +52,9 @@ def upload(channel, path, title, desc):
     return resp["id"]
 
 
+RETRY = re.compile(r"^\s*(⏳[^·]*|❌ error:[^·]*(exceeded|quota|uploadLimit)[^·]*)·\s?")
+
+
 def main():
     body = json.loads(gh("issue", "view", NUM, "--json", "body"))["body"]
     all_ok = bool(TODO.search(body))
@@ -59,8 +62,10 @@ def main():
         body = re.sub(r"^- \[ \] `(?!todo)", "- [x] `", body, flags=re.M)
     manifests, results = {}, []
     for m in list(LINE.finditer(body)):
-        rest = m.group("rest")
-        if "✅" in rest or "❌" in rest:
+        orig_rest = rest = m.group("rest")
+        if RETRY.match(rest):  # quedo pendiente por el tope diario de YouTube: se reintenta
+            rest = " " + RETRY.sub("", rest, count=1)
+        elif "✅" in rest or "❌" in rest:
             continue
         key, ch = m.group("key"), m.group("ch")
         day, fname = key.split("/", 1)
@@ -77,9 +82,13 @@ def main():
             mark = f"✅ https://youtube.com/shorts/{vid}"
             results.append(f"- {mark} · {title}")
         except Exception as e:
-            mark = f"❌ error: {str(e)[:150]}"
+            err = str(e)
+            if re.search(r"exceeded|quota|uploadLimit", err):
+                mark = "⏳ pendiente: tope diario de YouTube, se reintenta solo mañana"
+            else:
+                mark = f"❌ error: {err[:150]}"
             results.append(f"- {mark} · {fname}")
-        body = body.replace(m.group(0), m.group(0).replace("`" + rest, "`" + f" {mark} ·" + rest, 1), 1)
+        body = body.replace(m.group(0), m.group(0).replace("`" + orig_rest, "`" + f" {mark} ·" + rest, 1), 1)
         if all_ok is False:
             pass
     if results:
