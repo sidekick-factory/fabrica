@@ -13,6 +13,8 @@
   {"group": "es", "login": "spreen", "name": "Spreen", "hashtags": ["#Spreen"], "outputs": ["es"]},
   {"group": "es", "login": "rivers_gg", "name": "Rivers", "hashtags": ["#Rivers"], "outputs": ["es"]},
   {"group": "es", "login": "thegrefg", "name": "TheGrefg", "hashtags": ["#TheGrefg"], "outputs": ["es"]},
-  {"group": "es", "login": "elmariana", "name": "El Mariana", "hashtags": ["#ElMariana"], "outputs": ["es"]}
+  {"group": "es", "login": "elmariana", "name": "El Mariana", "hashtags": ["#ElMariana"], "outputs": ["es"]},
+  {"group": "es", "login": "vegetta777", "name": "Vegetta777", "hashtags": ["#Vegetta777"], "outputs": ["es"]},
+  {"group": "es", "login": "juegagerman", "name": "JuegaGerman", "hashtags": ["#JuegaGerman"], "outputs": ["es"]}
  ]
 }
