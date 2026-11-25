@@ -1,23 +1,23 @@
 {
  "lecciones": [
-  "Hay muy pocos datos: 21 Shorts, 0-6 vistas cada uno. Casi todos tienen 11-13 horas y 3 tienen solo 1,6 horas. Todo es una pista débil, no una conclusión.",
-  "Corrección a la regla anterior: los títulos concretos ('mató a un perro', 'discute con su novia', 'la novia lo descubrió', 'no puede creer...') sacaron unas 3,4 vistas de media. Los genéricos 'X en GTA 6 😂' sacaron unas 3,1, no 1,2. La diferencia es ruido, así que no está probado que lo concreto gane.",
-  "Lo que sí se ve: los genéricos de Kai Cenat fueron los peores (1, 1, 2, 4, media 2,0), y los de Lacy los mejores (6, 4, 3, 3, media 4,0). El tipo de título no lo explica. Puede ser el clip o simple azar.",
-  "Seguir escribiendo títulos con acción y persona/objeto, porque no perjudican y dan más información para comparar. Hacerlo como prueba, no como regla probada.",
-  "Los ganchos emocionales ('lo descubrió 😭', 'no puede creer 💀') rindieron igual que los descriptivos (2-4 vistas). Se pueden seguir usando.",
-  "Idioma: con el mismo clip, Daily y Diario quedaron parecidos (4-4, 3-3, 4-3, 4-2, y en un caso Diario 6 contra Daily 4). No hay ventaja clara, así que mantener ambos canales con el mismo gancho.",
-  "Streamer: Lacy 4,0 de media a las ~12 h (n=6), Kai Cenat 2,3 (n=12), IlloJuan 4 (n=1). Con estos números no se justifica cambiar pesos.",
-  "Los 3 Shorts de 1,6 horas (2, 1 y 0 vistas) no se pueden comparar con los de 12 horas. Comparar siempre a la misma edad (por ejemplo 24 h) y usar vistas por hora, que ahora son todas ≤0,5.",
-  "'gracia' solo existe en 3 clips (6, 7 y 8) con 0-2 vistas, y 'angulo' está en None en todos. No se puede decir nada de ángulo ni de nota de la IA. Rellenar ambos campos en cada clip.",
-  "Cuidar la forma: el único título en minúsculas, sin emoji y solo con palabras clave ('kai cenat gta6 novia') sacó 0 vistas. Es 1 solo caso, pero no cuesta nada evitarlo."
+  "Datos muy escasos: 25 Shorts, 0-9 vistas cada uno (media 3,6). Todo lo que sigue es una pista, no una conclusión. Corrección: la regla anterior hablaba de 21 Shorts de 11-13 h, pero 18 de los 25 tienen 35-36 h.",
+  "La edad explica más que el título. Los 4 Shorts con 0 vistas y de 11-22 h (YourRAGE x3 y Lacy 'roommate') son casi los más nuevos. Los de 35 h llevan 2-9 vistas. Comparar siempre a la misma edad (24 h o 48 h) y con vistas por hora (hoy ≈0,1/h).",
+  "Título concreto contra genérico a 35 h: concretos 5,1 de media (n=8) y genéricos 4,6 (n=9). Es ruido, no hay ganador. Seguir con títulos concretos (acción + persona) como prueba, no como regla.",
+  "Idioma: en los pares del mismo clip, Diario iguala o supera a Daily (9 contra 5, 6 contra 3, 5 contra 5, 4 contra 4). A 35 h, Diario saca 5,4 de media (n=10) y Daily 3,5 (n=8). Es una pista débil a favor de Diario. Puede deberse a la audiencia del canal y no al título. Mantener ambos canales.",
+  "Streamer: los genéricos de Lacy sacaron 4,75 (n=4) y los de Kai Cenat 3,25 (n=4). La regla anterior daba 2,0 para Kai y era un error. La diferencia es de 1-2 vistas, sin base para mover pesos.",
+  "IlloJuan tiene un solo Short, 9 vistas en Diario, el máximo empatado con 'perro'. Una sola muestra no prueba nada, pero merece más pruebas.",
+  "El clip 'Lacy mata a un perro' fue el mejor en Diario (9) y de los mejores en Daily (5). Los momentos con una acción clara y sorprendente (animal, novia, pelea) rinden al menos igual que lo genérico. Probar más de este tipo.",
+  "'gracia' solo está en 3 clips (7, 6 y 8) y sacaron 3, 3 y 2 vistas. El de nota más alta fue el de menos vistas, así que la nota de la IA no ha predicho nada todavía. 'angulo' está en None en todos, así que no se puede evaluar. Rellenar ambos campos en cada clip.",
+  "Los ganchos emocionales ('lo descubrió 😭', 'no puede creer 💀') sacaron 4-5 vistas, igual que los descriptivos. Se pueden seguir usando.",
+  "Etiquetar bien el streamer: 9 Shorts tienen streamer '?', entre ellos Kai Cenat, YourRAGE y un Lacy. Sin etiqueta no se puede agrupar."
  ],
  "evitar": [
-  "Títulos de solo palabras clave, en minúsculas y sin emoji (1 caso, 0 vistas).",
-  "Publicar casi el mismo título varias veces: hay 4 'Lacy en/in GTA 6' y 4 'Kai Cenat en/in GTA 6', y no aportan nada comparables entre sí.",
-  "Sacar conclusiones con menos de unas 100 vistas por grupo: hoy la diferencia máxima entre grupos es de 1-2 vistas.",
-  "Comparar Shorts de edades distintas (1,6 h contra 12 h) sin mirar vistas por hora a la misma edad.",
-  "Dejar el streamer como '?' en los clips de Kai Cenat. Eso impide agrupar bien los datos.",
-  "Títulos genéricos 'X en GTA 6 😂' con Kai Cenat (1-4 vistas, media 2,0). Probar primero con título concreto."
+  "Títulos solo con palabras clave en minúsculas y sin emoji ('kai cenat gta6 novia'): 0 vistas, aunque es 1 solo caso.",
+  "Sacar conclusiones con menos de unas 100 vistas por grupo: hoy los grupos se separan por 1-2 vistas.",
+  "Comparar Shorts de edades distintas (11-22 h contra 35 h) sin usar vistas por hora a la misma edad.",
+  "Repetir casi el mismo título: hay 4 'Lacy en/in GTA 6' y 4 'Kai Cenat en/in GTA 6', que no aportan nada.",
+  "Dejar el streamer como '?' o el ángulo en None.",
+  "Subir más clips de YourRAGE sin probar antes: 3 Shorts con 1, 0 y 0 vistas, aunque eran los más nuevos y la muestra es mínima."
  ],
  "peso_streamer": {
   "lacy": 1.0,
@@ -25,11 +25,11 @@
   "illojuan": 1.0
  },
  "pruebas": [
-  "Mismo clip, mismo canal: un título concreto con acción frente a uno genérico, en horarios parecidos y sin repetir el mismo título. Comparar vistas por hora a las 24 h, con al menos 6 clips por variante.",
-  "Publicar 3 clips de IlloJuan en Diario con título concreto, porque solo hay 1 dato y no se sabe si funciona en español.",
-  "Probar 2 clips de curiosidad del juego ('GTA 6: ¿qué pasa si...?') por canal contra 2 clips de momentos de streamer. Rellenar 'angulo' y 'gracia' en todos."
+  "Mismo clip, mismo canal: un título concreto frente a uno genérico, con horarios parecidos y sin repetir títulos. Medir vistas por hora a las 24 h, con al menos 6 clips por variante.",
+  "Subir 3 clips de IlloJuan a Diario y 3 a Daily con título concreto, para ver si el 9 fue casualidad y si en inglés funciona.",
+  "Probar 2 clips de curiosidad del juego ('GTA 6: ¿qué pasa si...?') por canal contra 2 clips de momentos de streamer, rellenando 'angulo' y 'gracia' en todos."
  ],
- "resumen": "Con 21 Shorts y 0-6 vistas cada uno no se puede decir qué funciona: los títulos concretos sacaron unas 3,4 vistas y los genéricos unas 3,1, y esa diferencia es ruido. Corregimos un dato de la regla anterior (los genéricos no sacaron 1,2). No cambiamos los pesos de los streamers, y esta semana probamos título concreto contra genérico con el mismo clip, más IlloJuan y curiosidad del juego.",
- "actualizado": "2026-11-24",
- "shorts_analizados": 21
+ "resumen": "Con 25 Shorts y 0-9 vistas cada uno no hay un ganador claro: concreto y genérico quedan casi iguales, y los Shorts con 0 vistas eran los más nuevos. Diario va algo por delante de Daily, no tocamos los pesos y esta semana probamos concreto contra genérico a la misma edad, más IlloJuan y curiosidad del juego, rellenando streamer y ángulo en todos.",
+ "actualizado": "2026-11-25",
+ "shorts_analizados": 25
 }
