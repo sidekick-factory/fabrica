@@ -73,11 +73,13 @@ def main():
         body = re.sub(r"^- \[ \] `(?!todo)", "- [x] `", body, flags=re.M)
     manifests, results = {}, []
     camp = campaigns()
+    # 1) juntar lo marcado que falta subir
+    todo = []
     for m in list(LINE.finditer(body)):
         orig_rest = rest = m.group("rest")
         if RETRY.match(rest):  # quedo pendiente por el tope diario de YouTube: se reintenta
             rest = " " + RETRY.sub("", rest, count=1)
-        elif "✅" in rest or "❌" in rest or "🔒" in rest:
+        elif any(c in rest for c in ("✅", "❌", "🔒", "📲")):
             continue
         key, ch = m.group("key"), m.group("ch")
         day, fname = key.split("/", 1)
@@ -90,28 +92,35 @@ def main():
         campaign, chans = camp.get(clip.get("login"), (None, []))
         if ch not in chans:  # p.ej. Lacy pide publico de habla inglesa: solo cuenta en Daily
             campaign = None
+        g = re.search(r"gracia (\d+)/10", rest)
+        todo.append((m, orig_rest, rest, key, ch, fname, out, campaign, int(g.group(1)) if g else 5))
+    # 2) el cupo automatico de YouTube (~6 al dia) es SOLO para clips de campana, los mas graciosos primero.
+    #    Los demas quedan "📲 para Studio": se suben por el navegador (no gastan este cupo).
+    todo.sort(key=lambda t: (t[7] is None, -t[8]))
+    quota_out = False
+    for m, orig_rest, rest, key, ch, fname, out, campaign, _g in todo:
         title = rest.split("Título:", 1)[1].strip() if "Título:" in rest else out["title"]
-        try:
-            tmp = os.path.join(tempfile.gettempdir(), fname)
-            urllib.request.urlretrieve(f"{RAW}/{key}", tmp)
-            # Content Rewards solo acepta clips enviados en los 30 min despues de publicarse:
-            # los de campana se suben en privado y se publican + envian juntos a la hora fija.
-            vid = upload(ch, tmp, title, out["desc"], privacy="private" if campaign else "public")
-            if campaign:
+        if campaign is None:
+            mark = "📲 para subir por Studio (no es de campaña)"
+        elif quota_out:
+            mark = "⏳ pendiente: tope diario de YouTube, se reintenta solo mañana"
+        else:
+            try:
+                tmp = os.path.join(tempfile.gettempdir(), fname)
+                urllib.request.urlretrieve(f"{RAW}/{key}", tmp)
+                # Content Rewards solo acepta clips enviados en los 30 min despues de publicarse:
+                # los de campana se suben en privado y se publican + envian juntos a la hora fija.
+                vid = upload(ch, tmp, title, out["desc"], privacy="private")
                 mark = f"🔒 https://youtube.com/shorts/{vid} · privado, se publica y envia a la campana \"{campaign}\" a la hora fija"
-            else:
-                mark = f"✅ https://youtube.com/shorts/{vid}"
-            results.append(f"- {mark} · {title}")
-        except Exception as e:
-            err = str(e)
-            if re.search(r"exceeded|quota|uploadLimit", err):
-                mark = "⏳ pendiente: tope diario de YouTube, se reintenta solo mañana"
-            else:
-                mark = f"❌ error: {err[:150]}"
-            results.append(f"- {mark} · {fname}")
+            except Exception as e:
+                err = str(e)
+                if re.search(r"exceeded|quota|uploadLimit", err):
+                    quota_out = True
+                    mark = "⏳ pendiente: tope diario de YouTube, se reintenta solo mañana"
+                else:
+                    mark = f"❌ error: {err[:150]}"
+        results.append(f"- {mark} · {fname}")
         body = body.replace(m.group(0), m.group(0).replace("`" + orig_rest, "`" + f" {mark} ·" + rest, 1), 1)
-        if all_ok is False:
-            pass
     if results:
         # Releer la lista justo antes de guardar: si mientras subia se marcaron otras casillas,
         # se respetan (antes se pisaban y "se desmarcaban"). Solo se cambian las lineas subidas.
@@ -119,7 +128,7 @@ def main():
         fresh = json.loads(gh("issue", "view", NUM, "--json", "body"))["body"]
         line_any = re.compile(r"^- \[[ xX]\] `(?P<key>[^`|]+)\|(?P<ch>daily|diario)`.*$", re.M)
         body = line_any.sub(lambda mm: done.get(mm.group("key") + "|" + mm.group("ch"), mm.group(0))
-                            if any(c in done.get(mm.group("key") + "|" + mm.group("ch"), "") for c in "✅❌🔒⏳")
+                            if any(c in done.get(mm.group("key") + "|" + mm.group("ch"), "") for c in "✅❌🔒⏳📲")
                             else mm.group(0), fresh)
         with tempfile.NamedTemporaryFile("w", suffix=".md", delete=False) as f:
             f.write(body)
