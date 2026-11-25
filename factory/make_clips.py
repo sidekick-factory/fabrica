@@ -80,7 +80,63 @@ def gql_clips(login):
         return None
 
 
+# YouTube bloquea a veces las descargas desde servidores: se prueban varios "clientes" de YouTube
+YT_ARGS = ["--extractor-args", "youtube:player_client=default,tv,web_safari,mweb", "--retries", "3", "--sleep-requests", "1"]
+
+
+def yt_candidates(st):
+    """Videos/directos recientes de GTA en YouTube: se toman los picos de 'lo mas repetido' (heatmap)."""
+    out = []
+    for tab in ("streams", "videos"):
+        lst = ytdlp_json([*YT_ARGS, "--flat-playlist", "-J", "--playlist-end", "5",
+                          f"https://www.youtube.com/{st['youtube']}/{tab}"]) or {}
+        for e in lst.get("entries") or []:
+            if not re.search(r"gta|grand theft", (e.get("title") or ""), re.I):
+                continue
+            info = ytdlp_json([*YT_ARGS, "-J", "--no-warnings", f"https://www.youtube.com/watch?v={e['id']}"]) or {}
+            day = info.get("upload_date") or info.get("release_date") or ""
+            if day and day < (datetime.date.today() - datetime.timedelta(days=3)).strftime("%Y%m%d"):
+                continue
+            heat = sorted(info.get("heatmap") or [], key=lambda h: -(h.get("value") or 0))
+            dur, picks = info.get("duration") or 0, []
+            for h in heat:
+                mid = (h["start_time"] + h["end_time"]) / 2
+                if mid < 90 or any(abs(mid - p) < 120 for p in picks):
+                    continue  # se salta la intro y momentos pegados
+                picks.append(mid)
+                a, b = max(mid - 28, 0), min(mid + 22, dur or mid + 22)
+                out.append({"id": f"yt{e['id']}{int(a)}", "title": info.get("title") or "",
+                            "views": int((info.get("view_count") or 0) * (h.get("value") or 0.5)),
+                            "seconds": b - a, "section": [a, b], "url": f"https://www.youtube.com/watch?v={e['id']}",
+                            "game": "Grand Theft Auto VI", "yt": True})
+                if len(picks) >= 2:
+                    break
+    print("youtube", st["name"], len(out), "momentos", flush=True)
+    return out
+
+
+def download(c, raw):
+    if c.get("section"):
+        a, b = c["section"]
+        run(["yt-dlp", *YT_ARGS, "-q", "-f", "bv*[height<=1080]+ba/b[height<=1080]/b", "--merge-output-format", "mp4",
+             "--download-sections", f"*{a:.0f}-{b:.0f}", "--force-keyframes-at-cuts", "-o", raw, c["url"]])
+    else:
+        run(["yt-dlp", "-q", "-f", "best[height<=1080]/best", "-o", raw, c["url"]])
+
+
 def candidates(st):
+    yt = []
+    if st.get("youtube"):
+        try:
+            yt = yt_candidates(st)
+        except Exception as e:
+            print("youtube fallo", st["name"], e, flush=True)
+    if st.get("only_youtube"):
+        return yt
+    return yt + candidates_twitch(st)
+
+
+def candidates_twitch(st):
     nodes = gql_clips(st["login"])
     out = []
     if nodes is None:  # respaldo sin filtro de juego
@@ -159,6 +215,8 @@ Responde SOLO un JSON:
  "titulo_en": "titulo en ingles, max 60 caracteres, que describa EXACTAMENTE lo que pasa y genere curiosidad, estilo Shorts virales, con el nombre del streamer, sin hashtags, 1 emoji al final",
  "titulo_es": "lo mismo en espanol natural (no traduccion literal)",
  "angulo": "reaccion" | "curiosidad_del_juego" | "fail" | "drama" | "otro" (curiosidad_del_juego = muestra algo sorprendente que se puede hacer en GTA 6),
+ "gancho_en": "texto corto (max 38 caracteres) que se muestra arriba en los 2 primeros segundos para que no deslicen: pregunta o promesa sobre lo que va a pasar, sin spoilear el remate, ej: 'He did NOT expect this 💀'",
+ "gancho_es": "lo mismo en espanol natural, ej: '¿Qué acaba de pasar? 😭'",
  "idea_tendencia": numero de la idea en tendencia que este clip cumple (o null si ninguna)
 }}
 Ejemplo de buen titulo: "IlloJuan desinstala GTA por accidente en pleno directo 😭". Malo: "IlloJuan en GTA 6".
@@ -647,7 +705,7 @@ def karaoke_events(words, style, y, size=3):
     return lines
 
 
-def write_ass(path, top_words, game_words, y_top, y_game):
+def write_ass(path, top_words, game_words, y_top, y_game, hook=None):
     head = f"""[Script Info]
 ScriptType: v4.00+
 PlayResX: {W}
@@ -657,12 +715,16 @@ WrapStyle: 0
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
 Style: Streamer,{FONT},74,&H00FFFFFF,&H00FFFFFF,&H00000000,&H64000000,-1,0,0,0,100,100,0,0,1,6,2,5,50,50,0,1
+Style: Gancho,{FONT},70,&H00FFFFFF,&H00FFFFFF,&H00000000,&H00000000,-1,0,0,0,100,100,0,0,3,10,0,8,60,60,90,1
 Style: Juego,{FONT},56,&H00FFFFFF,&H00FFFFFF,&H00000000,&H64000000,-1,0,0,0,100,100,0,0,1,5,2,5,50,50,0,1
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
 """
     lines = karaoke_events(top_words or [], "Streamer", y_top) + karaoke_events(game_words or [], "Juego", y_game, size=4)
+    if hook:  # gancho arriba en los primeros segundos (fondo negro, letra blanca grande)
+        h = hook.replace("{", "(").replace("}", ")").replace("\n", " ")[:42]
+        lines.insert(0, f"Dialogue: 1,{ts(0)},{ts(2.6)},Gancho,,0,0,0,,{{\\fad(120,250)}}{h}")
     path.write_text(head + "\n".join(lines) + "\n", encoding="utf-8")
 
 
@@ -708,9 +770,9 @@ def make_title(st, clip_title, lang):
     return (base[:72] + f" {tag} #GTA6 #Shorts").strip()
 
 
-def make_desc(st, lang, channel_name):
+def make_desc(st, lang, channel_name, src=None):
     tags = " ".join(st["hashtags"] + ["#GTA6", "#GTAVI", "#Shorts"])
-    src = f"twitch.tv/{st['login']}"
+    src = src or f"twitch.tv/{st['login']}"
     if lang == "es":
         return (f"Momento de {st['name']} jugando GTA 6. Clip de su directo; todo el crédito para {st['name']}: {src}\n"
                 f"Sigue a {channel_name} para los mejores momentos de GTA cada día.\n"
@@ -777,7 +839,7 @@ def judge(st, c):
     cid, url = c["id"], c["url"]
     raw = WORK / f"{cid}.mp4"
     if not raw.exists():
-        run(["yt-dlp", "-q", "-f", "best[height<=1080]/best", "-o", raw, url])
+        download(c, raw)
     bad, why = nudity(raw)
     if bad:
         print("descartado por desnudos:", cid, why, flush=True)
@@ -812,7 +874,7 @@ def process(st, c, manifest):
     cid, url = c["id"], c["url"]
     raw = WORK / f"{cid}.mp4"
     if not raw.exists():
-        run(["yt-dlp", "-q", "-f", "best[height<=1080]/best", "-o", raw, url])
+        download(c, raw)
     j = c.get("ia") or {}
     try:
         a, b = float(j.get("inicio") or 0), float(j.get("fin") or 0)
@@ -841,13 +903,13 @@ def process(st, c, manifest):
         if top is None or game is None:
             continue
         ass = WORK / f"{cid}-{lang}.ass"
-        write_ass(ass, top, game, y_top, y_game)
+        write_ass(ass, top, game, y_top, y_game, hook=(j.get(f"gancho_{lang}") or "").strip() or None)
         name = f"{st['login']}-{cid}-{lang}.mp4"
         render(raw, cam, vw, vh, band, ass, DAY / name)
         ch = CHANNELS[lang]
         title = clean_title(j.get(f"titulo_{lang}"), st, lang) or make_title(st, c["title"], lang)
         outputs.append({"file": name, "lang": lang, "channel": ch,
-                        "title": title, "desc": make_desc(st, lang, CH_NAME[ch])})
+                        "title": title, "desc": make_desc(st, lang, CH_NAME[ch], (f"youtube.com/{st['youtube']}" if c.get("yt") else None))})
     if not outputs:
         return False
     manifest.append({"id": cid, "streamer": st["name"], "login": st["login"], "title": c["title"],
