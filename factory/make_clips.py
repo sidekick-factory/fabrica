@@ -691,7 +691,8 @@ def render(src, cam, vw, vh, band, ass, dst):
     graph = graph.replace(f"scale={W}:{HALF}", f"scale={W}:{HALF}:flags=lanczos")
     graph += f";[v]unsharp=5:5:0.6:5:5:0.0,subtitles={ass.as_posix()}[out]"
     run(["ffmpeg", "-y", "-loglevel", "error", "-i", src, "-filter_complex", graph,
-         "-map", "[out]", "-map", "0:a?", "-c:v", "libx264", "-preset", "fast", "-crf", "18",
+         "-map", "[out]", "-map", "0:a?", "-c:v", "libx264", "-preset", "fast", "-crf", "20",
+         "-maxrate", "6M", "-bufsize", "12M",
          "-c:a", "aac", "-b:a", "192k", "-movflags", "+faststart", "-t", "59", dst])
 
 
