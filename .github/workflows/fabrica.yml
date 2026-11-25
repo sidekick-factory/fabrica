@@ -43,15 +43,15 @@ jobs:
 
       - name: Aligerar la galeria (que el envio no sea demasiado grande)
         run: |
-          # solo se guardan los videos de los ultimos 3 dias; los viejos ya se subieron o caducaron
-          cutoff=$(date -u -d '-2 days' +%F)
+          # solo se guardan los videos de hoy y ayer; los viejos ya se subieron o caducaron
+          cutoff=$(date -u -d '-1 days' +%F)
           for d in site/clips/*/; do
             day=$(basename "$d")
             if [[ "$day" < "$cutoff" ]]; then rm -f "$d"*.mp4; fi
           done
           # los videos pesados (>40 MB) se recomprimen; YouTube igual los vuelve a comprimir
-          find site/clips -name '*.mp4' -size +40M | while read f; do
-            ffmpeg -y -loglevel error -i "$f" -c:v libx264 -preset veryfast -crf 21 -maxrate 6M -bufsize 12M \
+          find site/clips -name '*.mp4' -size +30M | while read f; do
+            ffmpeg -nostdin -y -loglevel error -i "$f" -c:v libx264 -preset veryfast -crf 22 -maxrate 5M -bufsize 10M \
               -c:a copy -movflags +faststart "${f%.mp4}.tmp.mp4" && mv "${f%.mp4}.tmp.mp4" "$f"
           done
           du -sh site || true
