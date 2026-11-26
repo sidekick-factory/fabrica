@@ -4,7 +4,7 @@
  "streamers": [
   {"group": "en", "login": "kaicenat", "name": "Kai Cenat", "hashtags": ["#KaiCenat"], "outputs": ["en", "es"]},
   {"group": "en", "login": "lacy", "name": "Lacy", "hashtags": ["#LACY"], "outputs": ["en", "es"], "campaign": "$25,000 Lacy 30 Day Campaign", "campaign_channels": ["daily"]},
-  {"group": "en", "login": "yourragegaming", "name": "YourRAGE", "hashtags": ["#YourRAGE"], "outputs": ["en", "es"]},
+  {"group": "en", "login": "yourragegaming", "name": "YourRAGE", "hashtags": ["#YourRAGE"], "outputs": ["en", "es"], "campaign": "YourRAGE $7,500 Pool Campaign", "campaign_channels": ["daily"]},
 
   {"group": "es", "login": "auronplay", "name": "AuronPlay", "hashtags": ["#AuronPlay"], "outputs": ["es"]},
   {"group": "es", "login": "ibai", "name": "Ibai", "hashtags": ["#Ibai"], "outputs": ["es"]},
