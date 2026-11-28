@@ -15,6 +15,8 @@
   {"group": "es", "login": "thegrefg", "name": "TheGrefg", "hashtags": ["#TheGrefg"], "outputs": ["es"]},
   {"group": "es", "login": "elmariana", "name": "El Mariana", "hashtags": ["#ElMariana"], "outputs": ["es"]},
   {"group": "es", "login": "vegetta777", "youtube": "@Vegetta777", "name": "Vegetta777", "hashtags": ["#Vegetta777"], "outputs": ["es"]},
-  {"group": "es", "login": "juegagerman", "youtube": "@JuegaGerman", "name": "JuegaGerman", "hashtags": ["#JuegaGerman"], "outputs": ["es"]}
+  {"group": "es", "login": "juegagerman", "youtube": "@JuegaGerman", "name": "JuegaGerman", "hashtags": ["#JuegaGerman"], "outputs": ["es"]},
+  {"group": "es", "login": "aroyitt", "youtube": "@Aroyitt", "name": "Aroyitt", "hashtags": ["#Aroyitt"], "outputs": ["es"]},
+  {"group": "es", "login": "alexby11", "youtube": "@alexby11", "name": "Alexby", "hashtags": ["#Alexby"], "outputs": ["es"]}
  ]
 }

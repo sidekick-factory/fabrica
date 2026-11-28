@@ -104,7 +104,7 @@ def yt_candidates(st):
                 if mid < 90 or any(abs(mid - p) < 120 for p in picks):
                     continue  # se salta la intro y momentos pegados
                 picks.append(mid)
-                a, b = max(mid - 28, 0), min(mid + 22, dur or mid + 22)
+                a, b = max(mid - 60, 0), min(mid + 60, dur or mid + 60)  # ventana amplia: la IA elige inicio y fin
                 out.append({"id": f"yt{e['id']}{int(a)}", "title": info.get("title") or "",
                             "views": int((info.get("view_count") or 0) * (h.get("value") or 0.5)),
                             "seconds": b - a, "section": [a, b], "url": f"https://www.youtube.com/watch?v={e['id']}",
@@ -198,7 +198,8 @@ def nudity(path, frames=16):
     return bad, f"explicito={hard} piel={soft}"
 
 
-JUDGE_PROMPT = """Eres editor de un canal de YouTube Shorts de momentos graciosos de streamers jugando GTA.
+JUDGE_PROMPT = """Eres editor de un canal de YouTube Shorts de momentos de streamers jugando GTA (modelo a imitar: canales como "Clips out of context", con millones de vistas).
+LO QUE MAS FUNCIONA: el streamer HABLANDO y contando algo (una anecdota personal, una noticia, su opinion, una respuesta a un viewer, un enfado con el chat, un momento tierno o de pareja) con el juego de fondo, con principio y final claros. Un fail del juego sin reaccion hablada vale poco. Descarta lo que solo se entiende si viste el directo.
 Te paso {n} fotos del clip de {name} (en orden, una cada {step:.1f} s), el titulo original del clip ("{title}")
 y la transcripcion del audio con tiempos en segundos:
 {transcript}
@@ -206,20 +207,21 @@ y la transcripcion del audio con tiempos en segundos:
 Responde SOLO un JSON:
 {{
  "que_pasa": "una frase concreta de lo que ocurre (quien hace que y por que es gracioso)",
- "gracioso": 1-10 (que tan divertido/sorprendente es para alguien que no conoce el stream),
+ "gracioso": 1-10 (que tan entretenido es: divertido, sorprendente, tierno o polemico, para alguien que no conoce el stream; una buena historia contada por el streamer cuenta como alto),
+ "historia_completa": true/false (tiene planteamiento y remate dentro del clip),
  "contexto": 1-10 (se entiende lo que pasa sin haber visto el directo),
  "desnudos": "ninguno" | "leve" | "explicito" (pechos, genitales o sexo visibles = explicito; ropa interior o escenas sugerentes = leve),
  "apto_monetizar": true/false (false SOLO si hay desnudos explicitos, sexo mostrado o descrito con detalle, o insultos de odio; la violencia, disparos y peleas DEL JUEGO GTA, groserias normales, gimnasio, ropa ajustada o bromas leves SI son aptos -> true; ante la duda, true),
  "inicio": segundo donde empieza la mejor parte (con algo de contexto antes del chiste),
  "fin": segundo donde termina (justo despues del remate),
- "titulo_en": "titulo en ingles, max 60 caracteres, que describa EXACTAMENTE lo que pasa y genere curiosidad, estilo Shorts virales, con el nombre del streamer, sin hashtags, 1 emoji al final",
- "titulo_es": "lo mismo en espanol natural (no traduccion literal)",
+ "titulo_en": "titulo en ingles, max 70 caracteres, estilo misterio SIN revelar el final: [Streamer] + quien/que le dijo o le paso + 'this...', ej: 'Kai Cenat's chat asked him to do this...', 'Lacy got a call from Rockstar about this...'; 1-2 emojis de emocion al final, sin hashtags",
+ "titulo_es": "lo mismo en espanol natural, molde '[Streamer] + le ha pedido/le ha pasado/le dijo + esto...', ej: 'Silvia le ha pedido a Vegetta que hiciera esto...😊💜', 'IlloJuan le responde de forma epica a un viewer que le dijo esto...'",
  "angulo": "reaccion" | "curiosidad_del_juego" | "fail" | "drama" | "otro" (curiosidad_del_juego = muestra algo sorprendente que se puede hacer en GTA 6),
- "gancho_en": "texto corto (max 38 caracteres) que se muestra arriba en los 2 primeros segundos para que no deslicen: pregunta o promesa sobre lo que va a pasar, sin spoilear el remate, ej: 'He did NOT expect this 💀'",
+ "gancho_en": "SOLO si el clip no se entiende solo (p.ej. un fail sin explicacion): texto corto (max 38 caracteres) que da contexto arriba en los 2 primeros segundos, ej: 'His chat dared him to rob a bank 💀'; si el streamer ya lo explica hablando, null",
  "gancho_es": "lo mismo en espanol natural, ej: '¿Qué acaba de pasar? 😭'",
  "idea_tendencia": numero de la idea en tendencia que este clip cumple (o null si ninguna)
 }}
-Ejemplo de buen titulo: "IlloJuan desinstala GTA por accidente en pleno directo 😭". Malo: "IlloJuan en GTA 6".
+Malo: "IlloJuan en GTA 6" o titulos que cuentan el final ("X muere", "X choca").
 Si el clip muestra una mecanica curiosa del juego, usa el formato pregunta: "GTA 6: ¿qué pasa si le das tu arma al cajero?" (formato viral en otros canales).
 {tendencias}{receta}"""
 
@@ -429,7 +431,7 @@ def clean_title(t, st, lang):
     if not t:
         return None
     tag = st["hashtags"][0]
-    return (t[:80] + f" {tag} #GTA6 #Shorts").strip()
+    return (t[:90] + f" {tag} #gta #gta6").strip()
 
 
 # ---------------- 2. camara del streamer ----------------
@@ -686,6 +688,14 @@ def ts(t):
     return f"{int(h)}:{int(m):02d}:{s:05.2f}"
 
 
+SLURS = re.compile(r"\b(nigg\w*|n[i1]gg?a\w*|f[a4]gg?o?t\w*|retard\w*|maric[oó]n\w*|sudaca\w*|negrat\w*)\b", re.I)
+
+
+def censor(word):
+    """Tapa insultos de odio en los subtitulos (YouTube desmonetiza por eso)."""
+    return SLURS.sub(lambda m: m.group(0)[0] + "*" * (len(m.group(0)) - 1), word)
+
+
 def karaoke_events(words, style, y, size=3):
     lines = []
     for i in range(0, len(words), size):
@@ -695,7 +705,7 @@ def karaoke_events(words, style, y, size=3):
             end = g[k + 1]["start"] if k + 1 < len(g) else min(cur["end"] + 0.4, nxt)
             parts = []
             for j, w in enumerate(g):
-                txt = w["word"].upper().replace("{", "(").replace("}", ")")
+                txt = censor(w["word"]).upper().replace("{", "(").replace("}", ")")
                 if j == k:
                     parts.append(f"{{\\1c{PURPLE}\\fscx108\\fscy108}}{txt}{{\\1c&H00FFFFFF&\\fscx100\\fscy100}}")
                 else:
@@ -755,7 +765,7 @@ def render(src, cam, vw, vh, band, ass, dst):
     run(["ffmpeg", "-y", "-loglevel", "error", "-i", src, "-filter_complex", graph,
          "-map", "[out]", "-map", "0:a?", "-c:v", "libx264", "-preset", "fast", "-crf", "20",
          "-maxrate", "6M", "-bufsize", "12M",
-         "-c:a", "aac", "-b:a", "192k", "-movflags", "+faststart", "-t", "59", dst])
+         "-c:a", "aac", "-b:a", "192k", "-movflags", "+faststart", "-t", "150", dst])
 
 
 # ---------------- 7. titulos y descripciones ----------------
@@ -855,6 +865,9 @@ def judge(st, c):
         print("IA:", cid, json.dumps(j, ensure_ascii=False)[:400], flush=True)
         if j.get("desnudos") == "explicito" or j.get("apto_monetizar") is False:
             print("descartado por la IA (no monetizable)", cid, flush=True)
+            return None
+        if j.get("historia_completa") is False:
+            print("descartado por la IA (sin principio o sin remate)", cid, flush=True)
             return None
         if (j.get("gracioso") or 0) < 5 or (j.get("contexto") or 0) < 4:
             print("descartado por la IA (poco gracioso o sin contexto)", cid, flush=True)
