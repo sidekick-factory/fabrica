@@ -59,7 +59,7 @@ def buffer_channels():
                 continue
             names = {(c.get("name") or "").lower().lstrip("@"), (c.get("displayName") or "").lower().lstrip("@")}
             for ch, acc in ACCOUNT.items():
-                if acc in names:
+                if any(n.startswith(acc) for n in names):  # en TikTok la cuenta en ingles es sidekickdaily7
                     found[ch] = c["id"]
     return found
 
