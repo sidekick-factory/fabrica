@@ -874,7 +874,7 @@ def judge(st, c):
             return None
         c["tendencia"] = bool(j.get("idea_tendencia"))
         bonus = 1.5 if c["tendencia"] else 0.0  # version propia de una idea viral
-        return (j.get("gracioso") or 0) * 0.65 + (j.get("contexto") or 0) * 0.35 + base + 1.0 + bonus
+        return (j.get("gracioso") or 0) * 0.5 + (j.get("contexto") or 0) * 0.5 + base + 1.0 + bonus
     # sin IA: mas vistas, mas dialogo y mas reacciones ("jaja", "wtf", "no no no") = mejor
     secs = max(c.get("seconds") or 30, 1)
     density = min(len(words) / secs, 3.5)
@@ -934,6 +934,9 @@ def process(st, c, manifest):
     return True
 
 
+FOCUS_BONUS = 1.5  # ventaja para los streamers en los que se enfoca el canal
+
+
 def main():
     WORK.mkdir(exist_ok=True)
     if os.environ.get("FRESH") == "si" and DAY.exists():
@@ -949,7 +952,8 @@ def main():
         for st in [s for s in CFG["streamers"] if s["group"] == group]:
             for c in candidates(st)[:12]:
                 pool.append((st, c))
-        pool.sort(key=lambda p: -p[1]["views"])
+        # los streamers "focus" (estilo que funciona) se revisan primero
+        pool.sort(key=lambda p: (not p[0].get("focus"), -p[1]["views"]))
         # 1) el juez revisa ~3 veces mas clips de los que se necesitan
         judged, per_j = [], {}
         t0 = time.time()
@@ -969,7 +973,7 @@ def main():
             if sc is not None:
                 judged.append((sc, st, c))
                 per_j[st["login"]] = per_j.get(st["login"], 0) + 1
-        judged.sort(key=lambda x: -x[0])
+        judged.sort(key=lambda x: -(x[0] + (FOCUS_BONUS if x[1].get("focus") else 0)))
         # al menos 1 "version propia" de una idea viral por grupo, si hay alguna
         trend = [x for x in judged if x[2].get("tendencia")]
         if trend and trend[0] not in judged[:quota]:
