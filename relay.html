@@ -1,0 +1,17 @@
+<!doctype html><meta charset="utf-8"><title>relay</title>
+<script>
+// Ayudante de la fabrica: cuando una pagina (p.ej. TikTok Studio) la carga en un iframe,
+// descarga un clip de esta misma galeria y se lo pasa a la pagina madre para subirlo.
+// Solo entrega archivos de /clips/ de esta galeria.
+window.addEventListener('message', async (e) => {
+  const d = e.data || {};
+  if (d.kind !== 'want' || !/^clips\/\d{4}-\d{2}-\d{2}\/[\w.-]+\.mp4$/.test(d.path || '')) return;
+  try {
+    const b = await fetch(d.path).then(r => { if (!r.ok) throw new Error(r.status); return r.blob(); });
+    e.source.postMessage({kind: 'clip', path: d.path, blob: b}, e.origin);
+  } catch (err) {
+    e.source.postMessage({kind: 'clip', path: d.path, error: String(err)}, e.origin);
+  }
+});
+parent.postMessage({kind: 'relay-ready'}, '*');
+</script>
