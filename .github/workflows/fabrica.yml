@@ -44,7 +44,7 @@ jobs:
       - name: Aligerar la galeria (que el envio no sea demasiado grande)
         run: |
           # solo se guardan los videos de hoy y ayer; los viejos ya se subieron o caducaron
-          cutoff=$(date -u -d '-1 days' +%F)
+          cutoff=$(date -u -d '-2 days' +%F)
           for d in site/clips/*/; do
             day=$(basename "$d")
             if [[ "$day" < "$cutoff" ]]; then rm -f "$d"*.mp4; fi
