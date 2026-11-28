@@ -170,7 +170,7 @@ def main():
                 continue
             text = (title + HASHTAGS[ch])[:2150]
             inp = {"text": text, "channelId": chan_id, "schedulingType": "automatic", "mode": "customScheduled",
-                   "dueAt": when.isoformat().replace("+00:00", "Z"), "assets": {"videos": [{"url": media}]}}
+                   "dueAt": when.isoformat().replace("+00:00", "Z"), "assets": {"video": {"url": media}}}
             try:
                 res = gql(CREATE, {"input": inp})["createPost"]
             except Exception as e:
